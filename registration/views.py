@@ -322,6 +322,7 @@ def infoNewStaff(request):
         try:
           tokenValue = request.session["newStaff"]
           token = TempToken.objects.get(token=tokenValue)
+          context = {'staff': None, 'event': event, 'token': token, 'auth':True}
         except Exception as e:
           token = None
           context = {'staff': None, 'event': event, 'token': token, 'auth':True}
