@@ -6,7 +6,7 @@
 {% endif %}
 
 <div class="form-group">
-    <label for="add1" class="col-sm-3 control-label">Badge Name <span style="color:red;">*</span></label>
+    <label for="add1" class="col-sm-3 control-label">Preferred Name<span style="color:red;">*</span></label>
     <div class="col-sm-9">
         <input type="text" name="badgeName" id="badgeName" value="{{badge.badgeName}}" placeholder="Badge Name" class="form-control" required data-error="Badge name is required.">
     </div>
@@ -29,6 +29,38 @@
     </div>
     <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
 </div>
+
+{% elif staff == None %}
+<div class="form-group">
+    <label for="division" class="col-sm-3 control-label">Division <span style="color:red;">*</span></label>
+    <div class="col-sm-9">
+		<select id="division" name="division" class="form-control" required>
+            <option value="">-- Select One --</option>
+        </select>
+    </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
+</div>
+
+<div class="form-group">
+    <label for="title" class="col-sm-3 control-label">Title <span style="color:red;">*</span></label>
+    <div class="col-sm-9">
+		<select id="title" name="title" class="form-control" required>
+            <option value="">-- Select One --</option>
+        </select>
+    </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
+</div>
+
+<div class="form-group">
+    <label for="department" class="col-sm-3 control-label">Department <span style="color:red;">*</span></label>
+    <div class="col-sm-9">
+		<select id="department" name="department" class="form-control" required>
+            <option value="">-- Select One --</option>
+        </select>
+    </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
+</div>
+
 {% endif %}
 
 <div class="form-group">
@@ -71,20 +103,62 @@
 
 <hr/>
 
-<h3>Other Info</h3>
+<h3>Room Requirements</h3>
+<div class ="input-group col-sm-12">
 
 <div class="form-group">
-    <label for="twitter" class="col-sm-3 control-label">Twitter Handle</label>
+    <label for="accommodation" class="col-sm-3 control-label">Accommodation<span style="color:red;">*</span></label>
     <div class="col-sm-9">
-        <input type="text" id="twitter" value="{{staff.twitter}}" name="twitter" placeholder="@somefurry" class="form-control form-control-text" />
+		<select id="accommodation" name="accommodation" class="form-control" required>
+            <option value="">-- Select One --</option>
+            <option value="0">Crash Space</option>
+            <option value="1">Room Reimbursement</option>
+            <option value="2">None</option>
+        </select>
+		
+		<div class = 'aDesc text-info 0'>Select this option if you are requesting <b>a staff room</b> this year. </div> 
+		<div class = 'aDesc text-info 1'>Select this option if you are requesting a <b>room reimbursement</b> this year. </div> 
+		<div class = 'aDesc text-danger 2'>Select this option if you <b>aren't</b> requesting a staff room <em>or</em> a room reimbursement this year. </div> 
     </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
 </div>
+
 <div class="form-group">
-    <label for="telegram" class="col-sm-3 control-label">Telegram Handle</label>
+    <label for="whitelist" class="col-sm-3 control-label">Roommate Requests:</label>
     <div class="col-sm-9">
-        <input type="text" id="telegram" value="{{staff.telegram}}" name="telegram" placeholder="@somefurry" class="form-control form-control-text" />
+        <input type="text" id="whitelist" name="whitelist" value="{{staff.roommateRequests}}" placeholder="names" class="form-control form-control-text">
     </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
 </div>
+
+<div class="form-group">
+    <label for="blacklist" class="col-sm-3 control-label">Don't Room Me With:</label>
+    <div class="col-sm-9">
+        <input type="text" id="blacklist" name="blacklist" value="{{staff.roomateBlacklist}}" placeholder="names" class="form-control form-control-text">
+    </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
+</div>
+
+</div>
+<hr>
+
+<h3>Anime USA Staff Discord <small><a href='https://discord.gg/bJ77dmY' target="_blank">invite link</a></small></h3>
+<div class = 'text-info mb-3 col-sm-12'>Anime USA staff are strongly encouraged to join the staff Discord channel in order to receive official communications during all stages of the convention, including the ability to attend staff meetings remotely and communicate instantly at-con with staff. Please use the invite link above to sign up! </div>
+
+<div class = ' text-right text-warning mb-3 col-sm-12'><br>Please ensure that the name is correctly formatted! ex: name#1234<br> </div>
+<div class="form-group">
+    
+	
+	<label for="discord" class="col-sm-3 control-label">Discord Handle</label>
+    <div class="col-sm-9">
+        <input type="text" id="discord" name="discord" value="{{staff.discord}}" class="form-control form-control-text"/>
+    </div>
+    <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
+	
+</div>
+	<hr> 
+
+<h3>Other Info</h3>
 
 <div class="form-group">
     <label for="medical" class="col-sm-3 control-label">Medical Needs <span style="color:red;">*</span></label>
@@ -103,7 +177,7 @@
 </div>
 
 <div class="form-group">
-    <label for="skills" class="col-sm-3 control-label">Additional Skills <span style="color:red;">*</span></label>
+    <label for="skills" class="col-sm-3 control-label">Misc. Info<span style="color:red;">*</span></label>
     <div class="col-sm-9">
         <input type="text" id="skills" name="skills" value="{{staff.specialSkills}}" class="form-control form-control-text" required />
     </div>
