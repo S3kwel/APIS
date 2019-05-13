@@ -1,5 +1,3 @@
-console.log('element');
-
 var Element = function(options){
 	Element.instances++; //Should serve as a unique ID for each element.  
 	this.instances = Element.instances; 

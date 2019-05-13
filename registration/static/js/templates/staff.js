@@ -93,19 +93,19 @@ async function getOptionsFromJSON(path){
 		
 		//Title data.  
 		//Filter by group != 0 to avoid the chair team.   
-		let titles = await getOptionsFromJSON("/registration/titles");
-		titles.d.forEach(t=>{
-			if(t.groupNo != 0){
-				$('#title').append(titles.o[titles.d.indexOf(t)]);
-			}
-		});
+		// let titles = await getOptionsFromJSON("/registration/titles");
+		// titles.d.forEach(t=>{
+			// if(t.groupNo != 0){
+				// $('#title').append(titles.o[titles.d.indexOf(t)]);
+			// }
+		// });
 	
         //Division / Department data. 
-		let divMap = await getOptionsFromJSON("/registration/divmaps");
+		//let divMap = await getOptionsFromJSON("/registration/divmaps");
 		
-		console.log(divMap.top);
+		//console.log(divMap.top);
 		
-		$("#division").append(divMap.top); 
+		//$("#division").append(divMap.top); 
 		
 		
 		// $('#division').find('option').each((key, val)=>{

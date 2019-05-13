@@ -4,8 +4,12 @@ var shirtSizes = [];
 var adult; 
 
 
-$( "body" ).ready(function() {
-        var url = "/registration/pricelevels";
+$( "body" ).ready(function() { 
+	    alert(auth_token); 
+		
+		
+		
+		var url = "/registration/pricelevels";
         if(adult != undefined){
             url = "/registration/adultpricelevels";
         }
@@ -14,7 +18,9 @@ $( "body" ).ready(function() {
             levelData = data;
             $.each( data, function( key, val ) {
                 var price = val.base_price;
-                if (discount) { price = val.base_price - discount; }
+		
+                if (typeof discount != 'undefined') { price = val.base_price - discount; }
+				
                 levelTemplateData.push({
                     name: val.name,
                     price: "$" + price,
@@ -23,12 +29,16 @@ $( "body" ).ready(function() {
                 });
             });
             $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);
+			return; 
             $(".changeLevel").hide();
             
         });
 
         $.getJSON("/registration/shirts", function(data) {
             shirtSizes = data;
+			if(shirtSizes.length == 0){
+				console.warn("EM: No shirt sizes found!");
+			}
         });
 
 });
@@ -48,11 +58,13 @@ $( "body" ).ready(function() {
             }
         });
     });
+	
     $("#levelContainer").on('click', 'a.changeLevel', function() {
         $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);      
         $("#regLevel").val("");
         $(".changeLevel").hide();
     });
+	
     var clearLevels = function(){
         $.each( levelTemplateData, function( key, val ) {
             $("#"+val.levelId).text("Select " + val.name);

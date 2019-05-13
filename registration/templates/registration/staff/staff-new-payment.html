@@ -68,15 +68,27 @@
 
 {% block javascript %}
 <script>
-    var discount = {{event.newStaffDiscount.amountOff}}
-    var adult = true;
+	//Pass things here to allow external scripts to use the data. 
+	var auth_token = Boolean({{event.useAuthToken}});
 </script>
+
 <script type="text/javascript" src="/static/js/templates/price-types.js"></script>
 <script type="text/javascript" src="/static/js/templates/staff.js"></script>
- <script type="text/javascript">
+<script type="text/javascript">
 
 	$("#register").click(doRegister);
+	//Handle no staff discount.  
+	{% if not event.newStaffDiscount.amountOff%}
+	console.warn("EM: No staff discount found!"); 
+	var adult = true;
+    var discount = false;
 	
+	{% else %}
+	alert("JS2"); 
+	var adult = true;
+    var discount = {{event.newStaffDiscount.amountOff}};
+	
+	{% endif %}
 
 	function doRegister(e) {
 		e.preventDefault();
