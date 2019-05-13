@@ -197,6 +197,18 @@ class Department(models.Model):
     def __str__(self):
       return self.name
 
+class Division(models.Model):
+    name = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+      return self.name 
+
+class Title(models.Model):
+    name = models.CharField(max_length=200, blank=True)
+    groupNo = models.IntegerField(default=0)
+    def __str__(self):
+      return self.name 
+	  
 #End lookup and supporting tables
 
 
