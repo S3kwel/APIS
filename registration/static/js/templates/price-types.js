@@ -1,12 +1,13 @@
 var levelTemplateData = [];
 var levelData = [];
 var shirtSizes = [];
+var adult; 
 
 
 $( "body" ).ready(function() {
-        var url = "/apis/registration/pricelevels";
-        if(adult){
-            url = "/apis/registration/adultpricelevels";
+        var url = "/registration/pricelevels";
+        if(adult != undefined){
+            url = "/registration/adultpricelevels";
         }
 
         $.getJSON(url, function(data) {
@@ -26,7 +27,7 @@ $( "body" ).ready(function() {
             
         });
 
-        $.getJSON("/apis/registration/shirts", function(data) {
+        $.getJSON("/registration/shirts", function(data) {
             shirtSizes = data;
         });
 

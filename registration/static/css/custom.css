@@ -1,0 +1,29 @@
+.warning-exit{
+	display: inline-block; 
+	float: right;
+	margin-left: 10px; 
+	background-color: rgba(0,0,0,0.1);
+}
+.agree{
+	display: inline-block;
+	float: right; 
+}
+#register{
+	float: right; 
+}
+
+.warning-header{
+	text-align: center; 
+}
+.warning-header h5{
+		font-weight: bold; 
+}
+.warning-body{
+	padding: 10px;
+	width: 95%; 
+	margin-left: auto;
+	margin-right: auto; 
+}
+.test{
+	margin-bottom: 5px; 
+}
