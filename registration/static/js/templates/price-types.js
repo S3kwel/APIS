@@ -2,13 +2,11 @@ var levelTemplateData = [];
 var levelData = [];
 var shirtSizes = [];
 var adult; 
+var converter = new showdown.Converter()
+//NOTE: Templates for attendee reg are located ???
 
 
 $( "body" ).ready(function() { 
-	    alert(auth_token); 
-		
-		
-		
 		var url = "/registration/pricelevels";
         if(adult != undefined){
             url = "/registration/adultpricelevels";
@@ -16,9 +14,10 @@ $( "body" ).ready(function() {
 
         $.getJSON(url, function(data) {
             levelData = data;
+			console.log(data); 
             $.each( data, function( key, val ) {
                 var price = val.base_price;
-		
+			
                 if (typeof discount != 'undefined') { price = val.base_price - discount; }
 				
                 levelTemplateData.push({
@@ -29,7 +28,6 @@ $( "body" ).ready(function() {
                 });
             });
             $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);
-			return; 
             $(".changeLevel").hide();
             
         });
@@ -52,7 +50,7 @@ $( "body" ).ready(function() {
                 $("#regLevel").val(val.name);
                 $("#levelContainer").loadTemplate($("#levelTemplate"), val);
                 $(".changeLevel").show();
-                $(".selectLevel").text("Selected!");
+                $(".selectLevel").hide();
                 generateOptions(id);
                 return false;
             }
@@ -78,11 +76,12 @@ $( "body" ).ready(function() {
         $.each(levelData, function(key, thing){
             if (thing.id == levelId){
                 data = thing.options;
-                description = thing.description;
+                description = converter.makeHtml(thing.description);
                 return false;
             }
         });
-        var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Level Options</h4><hr/><div class='form-group'><div class='col-sm-12'>" + description + "</div></div></div>");
+		//NOTE: Why not template this out at some point? 
+        var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Level Options</h4><hr/><div class='form-group'><div class='col-sm-12'>" + converter.makeHtml(description) + "</div></div></div>");
         $("#levelContainer").append(container);
         $.each( data, function(key, val) {
             if (val.value == "0.00"){
@@ -96,7 +95,7 @@ $( "body" ).ready(function() {
                 case "plaintext":
                     var template = $("#optionPlainTextTemplate");
                     $("#optionsContainer").loadTemplate(template, {
-                        'content': val.description
+                        'content': converter.makeHtml(val.description)
                     }, {append: true});
                     break;  
                 case "bool":

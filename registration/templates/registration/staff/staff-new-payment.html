@@ -69,7 +69,9 @@
 {% block javascript %}
 <script>
 	//Pass things here to allow external scripts to use the data. 
-	var auth_token = Boolean({{event.useAuthToken}});
+	var auth_token = '{{event.useAuthToken}}';
+		auth_token = Boolean(auth_token)
+	 
 </script>
 
 <script type="text/javascript" src="/static/js/templates/price-types.js"></script>
