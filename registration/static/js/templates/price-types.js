@@ -81,63 +81,23 @@ $( "body" ).ready(function() {
             }
         });
 		//NOTE: Why not template this out at some point? 
-        var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Level Options</h4><hr/><div class='form-group'><div class='col-sm-12'>" + converter.makeHtml(description) + "</div></div></div>");
+		//TODO: Gut this system. The model is weird and the implementation is awkward. 
+        var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Description</h4><hr/><div class='form-group'><div class='col-sm-12'>" + converter.makeHtml(description) + "</div></div></div>");
         $("#levelContainer").append(container);
         $.each( data, function(key, val) {
-            if (val.value == "0.00"){
-                var price = " (Free) ";
-            } else {
+            if (val.value == "0.00"){var price = " (Free) ";}
+			else {
                 var price = " (+$" + val.value + ") "
             }
             var required = "";
             if (val.required) {required = "required";}
-            switch (val.type){
-                case "plaintext":
-                    var template = $("#optionPlainTextTemplate");
-                    $("#optionsContainer").loadTemplate(template, {
-                        'content': converter.makeHtml(val.description)
-                    }, {append: true});
-                    break;  
-                case "bool":
-                    var template = $("#optionBoolTemplate");
-                    if (val.required) {template = $("#optionBoolReqTemplate");}
-                    $("#optionsContainer").loadTemplate(template, {
-                        'name': val.name + " " + price,
-                        'id': "option_" + val.id
-                    }, {append: true});
-                    break;
-                case "int":
-                    var template = $("#optionIntTemplate");
-                    if (val.required) {template = $("#optionIntReqTemplate");}
-                    $("#optionsContainer").loadTemplate(template, {
-                        'name': val.name + " " + price,
-                        'id': "option_" + val.id
-                    }, {append: true});
-                    break;
-                case "string":
-                    var template = $("#optionStringTemplate");
-                    if (val.required) {template = $("#optionStringReqTemplate");}
-                    var placeholder = val.name;
-                    $("#optionsContainer").loadTemplate(template, {
-                        'name': val.name + " " + price,
-                        'id': "option_" + val.id,
-                        'placeholder': placeholder,
-                    }, {append: true});
-                    break;
-                default:
-                    if (val.list == []){break;}
-                    var options = [];
-                    if (!val.required) {options.push({"content": "Select One...", "value": ""});}
-                    $.each(val.list, function (key, item) {
-                        options.push({"content": item.name, "value": item.id})
-                    });
-                    $("#optionsContainer").loadTemplate($("#optionListTemplate"), {
-                        'name': val.name + " " + price,
-                        'id': "option_" + val.id,
-                        'options': options
-                    }, {append: true});
-                    break;
-            }
+            
+			var template = $("#optionBoolTemplate");
+			if (val.required) {template = $("#optionBoolReqTemplate");}
+			$("#optionsContainer").loadTemplate(template, {
+				'name': val.name + " " + price,
+				'id': "option_" + val.id
+			}, {append: true});
         });
 
         $("form").validator('update');

@@ -52,9 +52,9 @@ def content_file_name(instance, filename):
 class PriceLevelOption(models.Model):
     optionName = models.CharField(max_length=200)
     optionPrice = models.DecimalField(max_digits=6, decimal_places=2)
-    optionExtraType = models.CharField(max_length=100, blank=True)
-    optionExtraType2 = models.CharField(max_length=100, blank=True)
-    optionExtraType3 = models.CharField(max_length=100, blank=True)
+    #optionExtraType = models.CharField(max_length=100, blank=True)
+    #optionExtraType2 = models.CharField(max_length=100, blank=True)
+    #optionExtraType3 = models.CharField(max_length=100, blank=True)
     optionImage = models.ImageField(upload_to=content_file_name,blank=True,null=True)
     required = models.BooleanField(default=False)
     active = models.BooleanField(default=False)
@@ -65,12 +65,12 @@ class PriceLevelOption(models.Model):
         return '{0} (${1})'.format(self.optionName, self.optionPrice)
 
     def getList(self):
-        if self.optionExtraType in ["int", "bool", "string"]:
-            return []
-        elif self.optionExtraType == "ShirtSizes":
-            return [{'name':s.name, 'id':s.id} for s in ShirtSizes.objects.all()]
-        else:
-            return []
+        #if self.optionExtraType in ["int", "bool", "string"]:
+            #return []
+        #if self.optionExtraType == "ShirtSizes":
+            #return [{'name':s.name, 'id':s.id} for s in ShirtSizes.objects.all()]
+        #else:
+        return []
     def getOptionImage(self):
         if self.optionImage is None:
             return None
@@ -83,7 +83,9 @@ class PriceLevelOption(models.Model):
 class PriceLevel(models.Model):
     name = models.CharField(max_length=100)
     priceLevelOptions = models.ManyToManyField(PriceLevelOption, blank=True)
+    optionImage = models.ImageField(upload_to=content_file_name,blank=True,null=True)
     description = models.TextField()
+    quantity = models.IntegerField(default=0)
     basePrice = models.DecimalField(max_digits=6, decimal_places=2)
     startDate = models.DateTimeField()
     endDate = models.DateTimeField()
@@ -531,8 +533,8 @@ class AttendeeOptions(models.Model):
     optionValue3 = models.CharField(max_length=200, blank=True)
 
     def getTotal(self):
-        if self.option.optionExtraType == "int":
-            return int(self.optionValue) * self.option.optionPrice
+        #if self.option.optionExtraType == "int":
+            #return int(self.optionValue) * self.option.optionPrice
         return self.option.optionPrice
 
     def __str__(self):

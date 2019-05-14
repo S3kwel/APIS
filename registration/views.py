@@ -159,21 +159,21 @@ def getCartItemOptionTotal(options):
     optionTotal = 0
     for option in options:
         optionData = PriceLevelOption.objects.get(id=option['id'])
-        if optionData.optionExtraType == 'int':
-            if option['value']:
-                optionTotal += (optionData.optionPrice*Decimal(option['value']))
-        else:
-            optionTotal += optionData.optionPrice
+        #if optionData.optionExtraType == 'int':
+            #if option['value']:
+                #optionTotal += (optionData.optionPrice*Decimal(option['value']))
+        #else:
+        optionTotal += optionData.optionPrice
     return optionTotal
 
 def getOrderItemOptionTotal(options):
     optionTotal = 0
     for option in options:
-        if option.option.optionExtraType == 'int':
-            if option.optionValue:
-                optionTotal += (option.option.optionPrice*Decimal(option.optionValue))
-        else:
-            optionTotal += option.option.optionPrice
+        #if option.option.optionExtraType == 'int':
+            #if option.optionValue:
+                #optionTotal += (option.option.optionPrice*Decimal(option.optionValue))
+        #else:
+        optionTotal += option.option.optionPrice
     return optionTotal
 
 def getDiscountTotal(disc, subtotal):
@@ -235,11 +235,11 @@ def getDealerTotal(orderItems, discount, dealer):
     for item in orderItems:
         itemSubTotal = item.priceLevel.basePrice
         for option in item.attendeeoptions_set.all():
-            if option.option.optionExtraType == 'int':
-                if option.optionValue:
-                    itemSubTotal += (option.option.optionPrice*Decimal(option.optionValue))
-            else:
-                itemSubTotal += option.option.optionPrice
+            #if option.option.optionExtraType == 'int':
+                #if option.optionValue:
+                    #itemSubTotal += (option.option.optionPrice*Decimal(option.optionValue))
+            #else:
+            itemSubTotal += option.option.optionPrice
     partnerCount = dealer.getPartnerCount()
     partnerBreakfast = 0
     if partnerCount > 0 and dealer.asstBreakfast:
@@ -1733,13 +1733,13 @@ def getCart(request):
             for option in pdo:
                 dataOption = {}
                 optionData = PriceLevelOption.objects.get(id=option['id'])
-                if optionData.optionExtraType == 'int':
-                    if option['value']:
-                        itemTotal = (optionData.optionPrice*Decimal(option['value']))
-                        dataOption = {'name': optionData.optionName, 'number': option['value'], 'total': itemTotal}
-                else:
-                    itemTotal = optionData.optionPrice
-                    dataOption = {'name': optionData.optionName, 'total': itemTotal}
+                #if optionData.optionExtraType == 'int':
+                    #if option['value']:
+                        #itemTotal = (optionData.optionPrice*Decimal(option['value']))
+                        #dataOption = {'name': optionData.optionName, 'number': option['value'], 'total': itemTotal}
+                #else:
+                itemTotal = optionData.optionPrice
+                dataOption = {'name': optionData.optionName, 'total': itemTotal}
                 options.append(dataOption)
             orderItem = {
                 'id' : cart.id,
@@ -1803,11 +1803,11 @@ def saveCart(cart):
 
     for option in pdp['options']:
         plOption = PriceLevelOption.objects.get(id=int(option['id']))
-        if plOption.optionExtraType == 'int' and option['value'] == '':
-            attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue='0')
-        else:
-            if option['value'] != '':
-                attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
+        #if plOption.optionExtraType == 'int' and option['value'] == '':
+            #attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue='0')
+        #else:
+        if option['value'] != '':
+            attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
         attendeeOption.save()
 
     cart.transferedDate = datetime.now()
@@ -2137,7 +2137,7 @@ def getOptionsDict(orderItems):
                 orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue, 'id': ao.option.id, 'image': None})
 
             orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue,
-                              'id': ao.option.id, 'type': ao.option.optionExtraType})
+                              'id': ao.option.id})
     return orderDict
 
 def getEvents(request):
@@ -2167,7 +2167,6 @@ def getPriceLevelList(levels):
             'id': option.id,
             'required': option.required,
             'active': option.active,
-            'type': option.optionExtraType,
             'image': option.getOptionImage(),
             'description': option.description,
             'list': option.getList()

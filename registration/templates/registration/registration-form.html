@@ -33,23 +33,9 @@
 
             {% show_attendee_form event=event emailOptions=True %}
 
-        <h3><a name="level"></a>Select your registration options and level.</h3>
+        <h3><a name="level"></a>Select your Membership Type</h3>
         <hr>
-                <div class="form-group">
-                    <label for="firstName" class="col-sm-3 control-label">Badge Name <span style="color:red;">*</span></label>
-                    <div class="col-sm-9">
-                        <input type="text" id="badgeName" name="badgeName" placeholder="Your Name Here.." class="form-control form-control-text" maxlength="25" required="required" autocomplete="nope">
-                    </div>
-            <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
-                </div>
-                <div class="form-group">
-                    <label for="firstName" class="col-sm-3 control-label">Are you interested in volunteering?</label>
-                    <div class="col-sm-9">
-                        <select id="volunteer" name="volunteer"  class="form-control form-control-select" ><option value="">No Thanks</option></select>
-                    </div>
-                    
-                </div>
-		<hr/>
+          {% show_price_types %}
         <div class="container-fluid">
     		<div class="row" id="levelContainer">
                 <noscript>Javascript is required for this site.</noscript>
@@ -59,8 +45,7 @@
                 </div>
             </div>
         </div>
-		<br/>
-		<hr/>
+		<hr>		
              <div>
                     <div>
                         <label>
@@ -99,75 +84,10 @@
     </div>
 </script>
 
-<script type="text/html" id="optionPlainTextTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <div data-content="content"></div>
-        </div>
-    </div>
-</script>
-<script type="text/html" id="optionBoolTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="checkbox" data-id="id" class="form-control form-control-text levelOptions"/>
-        </div>
-    </div>
-</script>
-<script type="text/html" id="optionBoolReqTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="checkbox" data-id="id" class="form-control form-control-text levelOptions" required />
-        </div>
-    </div>
-</script>
-<script type="text/html" id="optionIntTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="number" data-id="id" class="form-control form-control-text levelOptions" min=0 />
-        </div>
-    </div>
 
-</script>
-<script type="text/html" id="optionIntReqTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="number" data-id="id" class="form-control form-control-text levelOptions" required min=0 />
-        </div>
-    </div>
 
-</script>
-<script type="text/html" id="optionStringTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="text" data-id="id" max-length=15 class="form-control form-control-text levelOptions"
-            data-template-bind='{"attribute": "placeholder", "value": "placeholder"}' />
-        </div>
-    </div>
-</script>
-<script type="text/html" id="optionStringReqTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="text" data-id="id" max-length=15 class="form-control form-control-text levelOptions" required
-            data-template-bind='{"attribute": "placeholder", "value": "placeholder"}' />
-        </div>
-    </div>
-</script>
-<script type="text/html" id="optionListTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <select data-id="id" class="form-control form-control-select levelOptions" 
-              data-template-bind='{"attribute": "options", "value": {"data": "options", "value":"value", "content":"content"}}'></select>
-        </div>
-    </div>
-</script>
+
+
 <script type="text/javascript" src="/static/js/templates/price-types.js"></script>
  <script type="text/javascript">
     var levelTemplateData = [];
