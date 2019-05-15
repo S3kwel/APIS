@@ -2161,6 +2161,7 @@ def getPriceLevelList(levels):
         'id':level.id,
         'base_price': level.basePrice.__str__(),
         'description': level.description,
+		'optionImage': level.getOptionImage(),
         'options': [{
             'name': option.optionName,
             'value': option.optionPrice,
@@ -2169,7 +2170,7 @@ def getPriceLevelList(levels):
             'active': option.active,
             'image': option.getOptionImage(),
             'description': option.description,
-            'list': option.getList()
+            'list': option.getList(),
             } for option in level.priceLevelOptions.order_by('rank', 'optionPrice').all() ]
           } for level in levels ]
     return data

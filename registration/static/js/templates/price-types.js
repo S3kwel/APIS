@@ -11,7 +11,9 @@ $( "body" ).ready(function() {
         if(adult != undefined){
             url = "/registration/adultpricelevels";
         }
-
+		
+		
+		
         $.getJSON(url, function(data) {
             levelData = data;
 			console.log(data); 
@@ -19,15 +21,15 @@ $( "body" ).ready(function() {
                 var price = val.base_price;
 			
                 if (typeof discount != 'undefined') { price = val.base_price - discount; }
-				
                 levelTemplateData.push({
                     name: val.name,
                     price: "$" + price,
                     levelId: "level_" + val.id,
-                    selectText: "Select " + val.name
+                    selectText: "Select " + val.name,
+					img: val.optionImage, 
                 });
             });
-            $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);
+            $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData, {afterInsert: d=>{setBg(d)}});
             $(".changeLevel").hide();
             
         });
@@ -48,7 +50,7 @@ $( "body" ).ready(function() {
             var id = val.levelId.split('_')[1];
             if (id == levelId){
                 $("#regLevel").val(val.name);
-                $("#levelContainer").loadTemplate($("#levelTemplate"), val);
+                $("#levelContainer").loadTemplate($("#levelTemplate"), val,{afterInsert: d=>{setBg(d)}});
                 $(".changeLevel").show();
                 $(".selectLevel").hide();
                 generateOptions(id);
@@ -58,7 +60,7 @@ $( "body" ).ready(function() {
     });
 	
     $("#levelContainer").on('click', 'a.changeLevel', function() {
-        $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);      
+        $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData, {afterInsert: d=>{setBg(d)}});      
         $("#regLevel").val("");
         $(".changeLevel").hide();
     });
@@ -69,7 +71,20 @@ $( "body" ).ready(function() {
         });
         $("form").validator('update');
     };
-
+	
+	var setBg = function(d){
+			let img = $(d).find('.priceImg').attr('src');
+			$(d).find('.priceImg').remove();
+			let w = $(d).find('.panel.price').outerWidth();
+			let h = $(d).find('.panel.price').outerHeight() * 0.86;
+			$(d).find('.panel.price').css('background-position',`center top`); 
+			$(d).find('.panel.price').css('background-size',`100%`); 
+			$(d).find('.panel.price').css('background-opacity',`0.5`); 
+			$(d).find('.panel.price').css('background-repeat',`no-repeat`); 
+			$(d).find('.panel.price').css('background-image',`url(${img})`); 
+			$($(d).find('.panel.price')).prepend(`<div class ='priceOptionCover' style='position: absolute; z-index: 0; pointer-events:none; background-color: black; opacity: 0.5; width: ${w}px; height: ${h}px; '></div>`);
+		}
+	
     var generateOptions = function(levelId){
         var data = [];
         var description = "";

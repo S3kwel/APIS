@@ -98,6 +98,14 @@ class PriceLevel(models.Model):
 
     def __str__(self):
       return self.name
+    def getOptionImage(self):
+        if self.optionImage is None:
+            return None
+        else:
+            try:
+                return self.optionImage.url
+            except ValueError:
+                return None
 
 class Charity(LookupTable):
     url = models.CharField(max_length=500,
