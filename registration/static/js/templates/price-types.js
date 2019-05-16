@@ -95,11 +95,13 @@ $( "body" ).ready(function() {
                 return false;
             }
         });
-		//NOTE: Why not template this out at some point? 
-		//TODO: Gut this system. The model is weird and the implementation is awkward. 
-        var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Description</h4><hr/><div class='form-group'><div class='col-sm-12'>" + converter.makeHtml(description) + "</div></div></div>");
-        $("#levelContainer").append(container);
+		//NOTE: Why not template this out at some point?
+		var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Description</h4><hr/><div class='form-group'><div class='col-sm-12'>" + converter.makeHtml(description) + "<div class ='row addons' ><h5>Add-ons</h5><hr></div></div></div></div>");
+		$("#levelContainer").append(container);
+		if(data.length == 0){$(".row.addons").remove();
+		} 
         $.each( data, function(key, val) {
+			
             if (val.value == "0.00"){var price = " (Free) ";}
 			else {
                 var price = " (+$" + val.value + ") "
@@ -113,6 +115,7 @@ $( "body" ).ready(function() {
 				'name': val.name + " " + price,
 				'id': "option_" + val.id
 			}, {append: true});
+		
         });
 
         $("form").validator('update');

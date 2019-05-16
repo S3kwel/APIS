@@ -28,8 +28,8 @@
     <form class="form-horizontal" role="form" data-toggle="validator">
     <div class="tab-content">
     <div role="tabpanel" class="tab-pane fade in active" id="personal">
-        <h1>Pre-Register for {{event}}!</h1>
-        <p>Welcome to the registration system. To continue, enter your information below. Required fields are marked with a red asterisk (<span style="color:red;">*</span>).</p>
+        <h1>{{event}}<small>&nbsp;Registration</small></h1>
+        <p>Required fields are marked with a red asterisk (<span style="color:red;">*</span>).</p>
 
             {% show_attendee_form event=event emailOptions=True %}
 
