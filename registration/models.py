@@ -1,3 +1,4 @@
+#NEW
 from __future__ import unicode_literals
 import json
 import random
@@ -207,6 +208,19 @@ class Department(models.Model):
     def __str__(self):
       return self.name
 
+#MODS MADE FOR ASUA
+class Division(models.Model):
+    name = models.CharField(max_length=200, blank=True)
+
+    def __str__(self):
+      return self.name 
+
+class Title(models.Model):
+    name = models.CharField(max_length=200, blank=True)
+    groupNo = models.IntegerField(default=0)
+    def __str__(self):
+      return self.name 
+	 
 #End lookup and supporting tables
 
 
@@ -346,10 +360,12 @@ class Staff(models.Model):
     attendee = models.ForeignKey(Attendee, null=True, blank=True, on_delete=models.CASCADE)
     registrationToken = models.CharField(max_length=200, default=getRegistrationToken)
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
-    supervisor = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
-    title = models.CharField(max_length=200, blank=True)
-    twitter = models.CharField(max_length=200, blank=True)
-    telegram = models.CharField(max_length=200, blank=True)
+    division = models.ForeignKey(Division, null=True, blank=True, on_delete=models.SET_NULL)
+    #supervisor = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    #NOTE: Changed to foreignKey 
+    title = models.ForeignKey(Title, null=True, blank=True, on_delete=models.SET_NULL)
+    #twitter = models.CharField(max_length=200, blank=True)
+    #telegram = models.CharField(max_length=200, blank=True)
     shirtsize = models.ForeignKey(ShirtSizes, null=True, blank=True, on_delete=models.SET_NULL)
     timesheetAccess = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
@@ -359,11 +375,15 @@ class Staff(models.Model):
     contactName = models.CharField(max_length=200, blank=True)
     contactPhone = models.CharField(max_length=200, blank=True)
     contactRelation = models.CharField(max_length=200, blank=True)
-    needRoom = models.BooleanField(default=False)
+    #needRoom = models.BooleanField(default=False)
     gender = models.CharField(max_length=50, blank=True)
     event = models.ForeignKey(Event, null=True, blank=True, on_delete=models.CASCADE)
     checkedIn = models.BooleanField(default=False)
-
+    #Changes for accommodations.  
+    accommodationType = models.CharField(max_length=50, blank=True)
+    roommateRequests = models.CharField(max_length=200, blank=True)
+    roomateBlacklist = models.CharField(max_length=200, blank=True)
+    discord = models.CharField(max_length=200, blank=True)
     def __str__(self):
       return '%s %s' % (self.attendee.firstName, self.attendee.lastName)
 

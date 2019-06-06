@@ -1,3 +1,4 @@
+#NEW
 from datetime import date
 import copy
 
@@ -234,22 +235,24 @@ class StaffResource(resources.ModelResource):
         fields = ('id', 'event__name', 'attendee__firstName', 'attendee__lastName', 'attendee__address1',
                   'attendee__address2', 'attendee__city', 'attendee__state', 'attendee__country',
                   'attendee__postalCode', 'attendee__phone', 'attendee__email',
-                  'department__name', 'supervisor', 'title', 'twitter', 'telegram', 'shirtsize__name',
+                  'division__name','department__name', 'title__name', 'shirtsize__name',
                   'specialSkills', 'specialFood', 'specialMedical', 'contactName', 'contactPhone',
-                  'contactRelation'
+                  'contactRelation','accommodationType','roommateRequests','roomateBlacklist','discord'
                   )
         export_order = ('id', 'event__name', 'attendee__firstName', 'attendee__lastName', 'attendee__address1',
                   'attendee__address2', 'attendee__city', 'attendee__state', 'attendee__country',
                   'attendee__postalCode', 'attendee__phone', 'attendee__email',
-                  'department__name', 'supervisor', 'title', 'twitter', 'telegram', 'shirtsize__name',
+                  'division__name','department__name', 'title__name', 'shirtsize__name',
                   'specialSkills', 'specialFood', 'specialMedical', 'contactName', 'contactPhone',
-                  'contactRelation'
+                  'contactRelation','accommodationType','roommateRequests','roomateBlacklist','discord'
                   )
 
+#https://developer.mozilla.org/en-US/docs/Learn/Server-side/Django/Admin_site
+#Looks like this defines how the staff model should be displayed?  
 class StaffAdmin(ImportExportModelAdmin):
     save_on_top = True
     actions = [send_staff_registration_email, checkin_staff, 'copy_to_event']
-    list_display = ('attendee', 'get_badge', 'get_email', 'title', 'department', 'shirtsize', 'staff_total', 'checkedIn', 'event')
+    list_display = ('attendee', 'get_badge', 'get_email', 'discord', 'division', 'department', 'title','accommodationType','roommateRequests','roomateBlacklist','shirtsize', 'staff_total','contactName','contactPhone','contactRelation','checkedIn', 'event')
     list_filter = ('event','department')
     search_fields = ['attendee__email', 'attendee__lastName', 'attendee__firstName']
     resource_class = StaffResource
@@ -261,9 +264,10 @@ class StaffAdmin(ImportExportModelAdmin):
                 ('attendee', 'registrationToken'),
                 ('event', 'get_email'),
                 ('get_badge', 'get_badge_id'),
-                ('title', 'department'),
-                ('twitter', 'telegram'),
+                ('title', 'department','division'),
                 ('shirtsize', 'checkedIn'),
+                ('discord'),
+                ('accommodationType','roommateRequests','roomateBlacklist')
             )}
         ),
         (
