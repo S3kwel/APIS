@@ -55,7 +55,7 @@ deactivate
 ## Copy the apache conf file from the stup folder to /etc/apache2/sites-available/
 ## Alter the permissions for the sqlite db, give the www-data group ownership.    
 sudo chmod 664 ~/APIS/db.sqlite3
-sudo chown www-data::www-data /home/APIS/db.sqlite3
+sudo chown www-data:www-data /home/dhickman/APIS/db.sqlite3
 sudo chown www-data:www-data /home/dhickman/APIS
 
 ## add Apache Full

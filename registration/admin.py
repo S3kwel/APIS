@@ -824,6 +824,8 @@ class DepartmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'volunteerListOk')
 
 admin.site.register(Department, DepartmentAdmin)
+admin.site.register(Division, DivisionAdmin)
+admin.site.register(Title)
 
 class CashdrawerAdmin(admin.ModelAdmin):
     list_display = ('timestamp', 'action', 'total', 'tendered', 'user')
