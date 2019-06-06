@@ -823,6 +823,9 @@ admin.site.register(Discount, DiscountAdmin)
 class DepartmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'volunteerListOk')
 
+class DivisionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+
 admin.site.register(Department, DepartmentAdmin)
 admin.site.register(Division, DivisionAdmin)
 admin.site.register(Title)
