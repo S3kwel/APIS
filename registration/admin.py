@@ -247,6 +247,52 @@ class StaffResource(resources.ModelResource):
                   'contactRelation','accommodationType','roommateRequests','roomateBlacklist','discord'
                   )
 
+
+class AttendeeAdmin(NestedModelAdmin):
+    inlines = [BadgeInline]
+    save_on_top = True
+    actions = [make_staff]
+    search_fields = ['email', 'lastName', 'firstName']
+    list_display = ('firstName', 'lastName',  'email', 'get_age_range')
+    fieldsets = (
+        (
+	    None,
+            {'fields':(
+                ('firstName', 'lastName'),
+                ('address1', 'address2'),
+                ('city', 'state', 'postalCode', 'country'),
+                ('email','phone', 'emailsOk', 'surveyOk'),
+                'birthdate',
+            )}
+        ),
+        (
+            'Other Con Info',
+            {'fields': (
+                'aslRequest', 'volunteerDepts', 'holdType', 'notes'
+            )}
+        ),
+        (
+            'Parent Info',
+            {'fields': (
+                'parentFirstName', 'parentLastName',
+                'parentPhone', 'parentEmail',
+            )}
+        ),
+    )
+
+    def get_age_range(self, obj):
+        born = obj.birthdate
+        today = date.today()
+        age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+        if age >= 18: return format_html('<span>18+</span>')
+        return format_html('<span style="color:red">MINOR FORM<br/>REQUIRED</span>')
+    get_age_range.short_description = "Age Group"
+
+
+
+admin.site.register(Attendee, AttendeeAdmin)
+admin.site.register(AttendeeOptions)
+
 #https://developer.mozilla.org/en-US/docs/Learn/Server-side/Django/Admin_site
 #Looks like this defines how the staff model should be displayed?  
 class StaffAdmin(ImportExportModelAdmin):
@@ -719,50 +765,7 @@ class BadgeAdmin(NestedModelAdmin, ImportExportModelAdmin):
 
 admin.site.register(Badge, BadgeAdmin)
 
-class AttendeeAdmin(NestedModelAdmin):
-    inlines = [BadgeInline]
-    save_on_top = True
-    actions = [make_staff]
-    search_fields = ['email', 'lastName', 'firstName']
-    list_display = ('firstName', 'lastName',  'email', 'get_age_range')
-    fieldsets = (
-        (
-	    None,
-            {'fields':(
-                ('firstName', 'lastName'),
-                ('address1', 'address2'),
-                ('city', 'state', 'postalCode', 'country'),
-                ('email','phone', 'emailsOk', 'surveyOk'),
-                'birthdate',
-            )}
-        ),
-        (
-            'Other Con Info',
-            {'fields': (
-                'aslRequest', 'volunteerDepts', 'holdType', 'notes'
-            )}
-        ),
-        (
-            'Parent Info',
-            {'fields': (
-                'parentFirstName', 'parentLastName',
-                'parentPhone', 'parentEmail',
-            )}
-        ),
-    )
 
-    def get_age_range(self, obj):
-        born = obj.birthdate
-        today = date.today()
-        age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-        if age >= 18: return format_html('<span>18+</span>')
-        return format_html('<span style="color:red">MINOR FORM<br/>REQUIRED</span>')
-    get_age_range.short_description = "Age Group"
-
-
-
-admin.site.register(Attendee, AttendeeAdmin)
-admin.site.register(AttendeeOptions)
 
 admin.site.register(OrderItem)
 
