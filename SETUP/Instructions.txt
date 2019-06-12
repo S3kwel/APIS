@@ -10,30 +10,55 @@ apt-get update
 apt-get install apache2 postgresql-9.4 postgresql-server-dev-9.4 build-essential libxml2 libxml2-dev libxslt1-dev python python-dev python-virtualenv python-pip libapache2-mod-wsgi
 
 ## (As local user)
-## clone the repo, setup venv. 
 ## Allow the www-data user to run pull.sh (last line)
 sudo visudo
 www-data ALL = NOPASSWD:/home/dhickman/pull.sh
-  
+
+
+## clone the repo, get the local branch to track your target branch; check it out.  
 sudo git clone https://github.com/S3kwel/APIS/
 sudo git clone --mirror https://github.com/S3kwel/APIS/
-cd APIS
-sudo git checkout development
 
-sudo chmod +x /home/dhickman/APIS/pull.sh
-sudo chown :www-data /home/dhickman/APIS/pull.sh
+cd APIS
+
+sudo git branch -r #To see branches. 
+sudo git branch -t registration origin/registration
+sudo git checkout registration
+
+##Pull the needed docs from the repo. 
+## Make sure that all paths point to your installation of APIS and read through the file!
+## WSGI.py and settings may need tweaking depending on your needs.  You are advised to review them.  
+sudo cp /home/dhickman/APIS/SETUP/pull.sh /home/dhickman
+sudo cp /home/dhickman/APIS/SETUP/wsgi.py /home/dhickman/APIS/fm_eventmanager/wsgi.py
+sudo cp /home/dhickman/APIS/SETUP/settings.py /home/dhickman/APIS/fm_eventmanager/settings.py
+
+
+sudo chmod +x /home/dhickman/pull.sh
+sudo chown :www-data /home/dhickman/pull.sh
 
 sudo virtualenv -p python2 venv
 source venv/bin/activate
 
 ## Install requirements.
 ## Make sure you're using the version of pip inside the venv folder! Otherwise you will install system-wide! 
-sudo venv/bin/pip install -r requirements.txt
-sudo pip install requests
-
-## Check configuration -- settings.py from the setup folder can be moved into  /var/www/html/APIS/APIS/fm_eventmanager/
-## Replace wsgi.py with the one from the setup folder AFTER changing the paths to be consistent with your setup.  
-## Make sure that all paths point to your installation of APIS and read through the file!   
+## If you run into errors, python 2.7 (which this runs on) is apparently near its EOL.  
+sudo venv/bin/pip install django==1.11.17
+sudo venv/bin/pip install django-mathfilters==0.4.0
+sudo venv/bin/pip install django-nested-inline==0.3.7
+sudo venv/bin/pip install django-import-export==1.1.0
+sudo venv/bin/pip install psycopg2==2.7.1
+sudo venv/bin/pip install configobj
+sudo venv/bin/pip install django-extensions
+sudo venv/bin/pip install django-guardian==1.5.1
+sudo venv/bin/pip install django-flat-responsive
+sudo venv/bin/pip install django-widget-tweaks
+sudo venv/bin/pip install squareconnect==2.20181212.0
+sudo venv/bin/pip install pyOpenSSL
+sudo venv/bin/pip install django-u2f
+sudo venv/bin/pip install Pillow>=5.3
+sudo venv/bin/pip install Werkzeug
+sudo venv/bin/pip install django-debug-toolbar
+ 
 
 ## Collect static files.  
 ## default is [base dir for files]/APIS/static
@@ -79,4 +104,5 @@ sudo chown :www-data /home/dhickman/pull.sh
 
 
  
+
 
