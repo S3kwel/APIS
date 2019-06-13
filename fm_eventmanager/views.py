@@ -49,9 +49,7 @@ def pull(request):
     event = request.META.get('HTTP_X_GITHUB_EVENT', 'ping')
 
     print >>sys.stderr, 'Beginning pull from the Github!'
-    f = open('/home/dhickman/log','w')
-    subprocess.call(['sudo ./home/dhickman/pull.sh'], shell=True, stdout=f, stderr=f)
-    f.close()
+    subprocess.call("/home/dhickman/APIS/pull.sh")
     print >>sys.stderr, 'Done!'
     return HttpResponse('success')
     '''

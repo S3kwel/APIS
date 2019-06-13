@@ -39,7 +39,7 @@ class EventForm(forms.ModelForm):
         model = Event
         exclude = []
 
-class EventAdmin(NestedModelAdmin):
+class EventAdmin(NestedModelAdmin,ImportExportModelAdmin):
     list_display = ('name','useAuthToken','staffEventRegistration')   
     form = EventForm
     class Media:
@@ -818,7 +818,7 @@ class OrderAdmin(NestedModelAdmin):
 
 admin.site.register(Order, OrderAdmin)
 
-class PriceLevelAdmin(admin.ModelAdmin):
+class PriceLevelAdmin(ImportExportModelAdmin):
     list_display = ('name', 'basePrice', 'startDate', 'endDate', 'public', 'group')
 
 admin.site.register(PriceLevel, PriceLevelAdmin)
@@ -834,15 +834,18 @@ class DiscountAdmin(admin.ModelAdmin):
 
 admin.site.register(Discount, DiscountAdmin)
 
-class DepartmentAdmin(admin.ModelAdmin):
+class DepartmentAdmin(ImportExportModelAdmin):
     list_display = ('name', 'volunteerListOk')
 
-class DivisionAdmin(admin.ModelAdmin):
+class DivisionAdmin(ImportExportModelAdmin):
+    list_display = ('id', 'name')
+
+class TitleAdmin(ImportExportModelAdmin):
     list_display = ('id', 'name')
 
 admin.site.register(Department, DepartmentAdmin)
 admin.site.register(Division, DivisionAdmin)
-admin.site.register(Title)
+admin.site.register(Title,TitleAdmin)
 
 class CashdrawerAdmin(admin.ModelAdmin):
     list_display = ('timestamp', 'action', 'total', 'tendered', 'user')

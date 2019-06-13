@@ -58,6 +58,7 @@ sudo venv/bin/pip install django-u2f
 sudo venv/bin/pip install Pillow>=5.3
 sudo venv/bin/pip install Werkzeug
 sudo venv/bin/pip install django-debug-toolbar
+sudo venv/bin/pip install images
  
 
 ## Collect static files.  
@@ -82,6 +83,8 @@ deactivate
 sudo chmod 664 ~/APIS/db.sqlite3
 sudo chown www-data:www-data /home/dhickman/APIS/db.sqlite3
 sudo chown www-data:www-data /home/dhickman/APIS
+sudo chown -R www-data:www-data media/
+
 
 ## add Apache Full
 sudo ufw allow 'Apache Full'
