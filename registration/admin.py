@@ -764,53 +764,6 @@ class PriceLevelFilter(admin.SimpleListFilter):
         if priceLevel:
             return queryset.filter(orderitem__priceLevel__name=priceLevel)
 
-class BadgeAdmin(NestedModelAdmin, ImportExportModelAdmin):
-    list_per_page = 30
-    inlines = [OrderItemInline]
-    resource_class = BadgeResource
-    save_on_top = True
-    list_filter = ('event', 'printed', PriceLevelFilter)
-    list_display = ('attendee', 'badgeName', 'badgeNumber', 'printed', 'paidTotal', 'effectiveLevel', 'abandoned',
-                    'get_age_range', 'registeredDate')
-    search_fields = ['attendee__email', 'attendee__lastName', 'attendee__firstName', 'badgeName', 'badgeNumber']
-    readonly_fields = ['get_age_range' ]
-    actions = [assign_badge_numbers, print_badges, print_label_badges, print_dealerasst_badges, assign_numbers_and_print,
-               print_dealer_badges, assign_staff_badge_numbers, print_staff_badges, send_upgrade_form_email,
-               'cull_abandoned_carts']
-    fieldsets = (
-        (
-	    None,
-            {'fields':(
-                'printed',
-                ('badgeName', 'badgeNumber', 'get_age_range'),
-                ('registeredDate', 'event'),
-                'attendee',
-            )}
-        ),
-    )
-
-    def get_age_range(self, obj):
-        try:
-            born = obj.attendee.birthdate
-            today = date.today()
-            age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-            if age >= 18: return format_html('<span>18+</span>')
-            return format_html('<span style="color:red">MINOR FORM<br/>REQUIRED</span>')
-        except:
-            return 'Invalid DOB'
-    get_age_range.short_description = "Age Group"
-
-    def cull_abandoned_carts(self, request, queryset):
-        abandoned = [ x for x in Badge.objects.filter() if x.abandoned == 'Abandoned' ]
-        for obj in abandoned:
-            obj.delete()
-        self.message_user(request, "Removed {0} abandoned orders.".format(len(abandoned)))
-    cull_abandoned_carts.short_description = "Cull Abandoned Carts (Use with caution!)"
-
-admin.site.register(Badge, BadgeAdmin)
-
-
-
 admin.site.register(OrderItem)
 
 def send_registration_email(modeladmin, request, queryset):
@@ -876,7 +829,7 @@ class DivisionAdmin(ImportExportModelAdmin):
 class TitleAdmin(ImportExportModelAdmin):
     list_display = ('id', 'name')
     save_on_top = True
-    list_display = ('name', 'volunteerListOk')
+    list_display = ('id','name')
 
 admin.site.register(Department, DepartmentAdmin)
 admin.site.register(Division, DivisionAdmin)

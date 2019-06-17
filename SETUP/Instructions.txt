@@ -22,8 +22,8 @@ sudo git clone --mirror https://github.com/S3kwel/APIS/
 cd APIS
 
 sudo git branch -r #To see branches. 
-sudo git branch -t registration origin/registration
-sudo git checkout registration
+sudo git branch -t dev origin/dev
+sudo git checkout dev
 
 ##Pull the needed docs from the repo. 
 ## Make sure that all paths point to your installation of APIS and read through the file!
@@ -59,8 +59,9 @@ sudo venv/bin/pip install django-u2f
 sudo venv/bin/pip install Pillow>=5.3
 sudo venv/bin/pip install Werkzeug
 sudo venv/bin/pip install django-debug-toolbar
-sudo venv/bin/pip install images
- 
+sudo venv/bin/pip install image
+sudo venv/bin/pip install requests
+sudo venv/bin/pip install backports.weakref
 
 ## Collect static files.  
 ## default is [base dir for files]/APIS/static as per the settings.py provided. 
