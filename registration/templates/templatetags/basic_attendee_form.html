@@ -1,6 +1,4 @@
-
-<hr>
-    
+ 
 <div class="form-group">
     <label for="firstName" class="col-sm-3 control-label">Full (Legal) Name <span style="color:red;">*</span></label>
     <div class="col-sm-4">
@@ -37,11 +35,12 @@
 <div class="form-group">
     <label for="phone" class="col-sm-3 control-label">Phone Number <span style="color:red;">*</span></label>
     <div class="col-sm-9">
-        <input type="phone" id="phone" value="{{attendee.phone}}" placeholder="Phone Number" class="form-control" required data-error="Phone number is required.">
+        <input type="tel" id="phone" value="{{attendee.phone}}" placeholder="Phone Number" class="form-control" required data-error="Phone number is required.">
     </div>
     <div class="col-sm-offset-3 help-block with-errors"style=" padding-left:15px;"></div>
 </div>
 
+{% if event.collectAddress %}
 <div class="form-group">
     <label for="add1" class="col-sm-3 control-label">Address <span style="color:red;">*</span></label>
     <div class="col-sm-9">
@@ -64,7 +63,7 @@
         <input type="text" name="city" id="city" value="{{attendee.city}}" placeholder="City" class="form-control" required data-error="City is required. ">
     </div>
     <div class="col-sm-5">
-        <select class="form-control bfh-states" id="state" data-country="US" data-state="VA" name="state"></select>
+        <select class="form-control bfh-states" id="state" data-country="US" name="state"></select>
     </div>
     <div class="col-sm-offset-3 help-block with-errors" style="padding-left:15px;"></div>
 </div>
@@ -79,6 +78,14 @@
     </div>
     <div class="col-sm-offset-3 help-block with-errors" style="padding-left:15px;"></div>
 </div>
+{% else %}
+    <input type="hidden" name="address1" value="">
+    <input type="hidden" name="address2" value="">
+    <input type="hidden" name="city" value="">
+    <input type="hidden" name="state" value="">
+    <input type="hidden" name="country" value="">
+    <input type="hidden" name="zip" value="">
+{% endif %}
 
 <div class="form-group">
     <label for="birthDate" class="col-sm-3 control-label">Date of Birth <span style="color:red;">*</span></label>

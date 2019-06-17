@@ -1,4 +1,5 @@
 {% extends "registration/master.html" %}
+{% load settings %}
 
 {% block head %}
     <script type="text/javascript" src="https://js.squareup.com/v2/paymentform"></script>
@@ -6,8 +7,9 @@
     <script type="text/javascript">
 var paymentForm = new SqPaymentForm({
   // Initialize the payment form elements
-  applicationId: "sandbox-sq0idp-kGRHLRan0Elu80JLAEQqQQ",
-  locationId: "CBASED7NPDEnW3rjrTkuZBqR9vYgAQ",
+  applicationId: "{% settings_value 'SQUARE_APPLICATION_ID' %}",
+  locationId: "{% settings_value 'SQUARE_LOCATION_ID' %}",
+
   inputClass: 'form-control',
   // Initialize the credit card placeholders
   cardNumber: {
@@ -45,7 +47,7 @@ var paymentForm = new SqPaymentForm({
         return;
       }
       document.getElementById('card-nonce').value = nonce;
-      doCheckout();
+      doCheckout(cardData);
     },
     /*
      * callback function: unsupportedBrowserDetected
@@ -90,6 +92,15 @@ var paymentForm = new SqPaymentForm({
 		<h1>Add A Partner</h1>
 		<hr>
 
+        {% if dealer.tableSize.partnerMax == asstCount %}
+
+            <div>You already have the maximum partners for this table type. If you feel this is in error, please contact <a href="mailto:{{ event.dealerEmail }}">{{ event.dealerEmail }}</a></div>
+
+        {% else %}
+
+        <div class="form-group">Please enter only the name(s) and email(s) for dealer partners that you need to pay for. You do not need to enter your own information or re-enter partners you have already paid for.</div>
+
+
 		<form class="form-horizontal" role="form" data-toggle="validator">
 
 		<div class="form-group">
@@ -108,16 +119,12 @@ var paymentForm = new SqPaymentForm({
 		<h3>Charges</h3>
 		
 		<div class='form-group' style='margin-left:30px;'>You will be charged $45 for each new partner added via this form.</div>
-		<div class='form-group' style='margin-left:30px;'><span style='color:red'><b>Important!</b></span> Do not use this form if you <u>only</u> wish to change existing partner information. Contact <a href='mailto:marketplace@furthemore.org'>marketplace@futhemore.org</a> instead.</div>
+		<div class='form-group' style='margin-left:30px;'><span style='color:red'><b>Important!</b></span> Do not use this form if you <u>only</u> wish to change existing partner information. Contact <a href='mailto:{{ event.dealerEmail }}'>{{ event.dealerEmail }}</a> instead.</div>
 
-        <div class="form-group">
-                    <label for="asstbreakfst" class="col-sm-3 control-label">I want to pay for breakfast for my partners</label>
-                    <div class="col-sm-9">
-                        <input type="checkbox" id="asstbreakfast" name="asstbreakfast" />
-                        <label>You will be charged an additional $60 per partner for this option.</label>
-                    </div>
+		<div class='form-group'>
+            <label class="col-sm-3 control-label">Total: </label>
+            <div class="col-sm-9" id="total" style="padding-top:5px;">$0.00</div>
         </div>
-		
 		<hr/>
 		<h3>Billing Information</h3>
 
@@ -205,15 +212,18 @@ var paymentForm = new SqPaymentForm({
 		</div>
  		</form>
 		
+        {% endif %}
 
 	</div>
 	</div>
+
+
 {% else %}
 
 	<div class="tab-content">
 	<div role="tabpanel" class="tab-pane fade in active" id="personal">
 		<h1>Checkout</h1>
-		<div>There are no attendees in your order. Please check your email link and try again, or contact <a href="mailto:registration@furthemore.org">registration@furthemore.org</a> for help.</div>
+		<div>Your session has expired. Please check your email link and try again, or contact <a href="mailto:{{ event.dealerEmail }}">{{ event.dealerEmail }}</a> for help.</div>
 	</div>
 	</div>
 
@@ -225,122 +235,44 @@ var paymentForm = new SqPaymentForm({
 {% block javascript %}
 <script type="text/javascript">
 
-	var tableSizes = [];
-    var dealerPartners = "{{dealer.partners}}";
+    var maxPartners = {{dealer.tableSize.partnerMax}}
+    var dealerPartners = {{jsonAssts|safe}}
 	$( "body" ).ready(function() {
-        $.getJSON("{% url 'tablesizes' %}", function(data) {
-            tableSizes = data;
-   		    setTableInfo({{dealer.tableSize.id}});
-        });
-
-
 		$("#state").val("{{attendee.state}}");
 		$("#country").val("{{attendee.country}}");
 	}); 
-
-    function setTableInfo(id){
-        $.each(tableSizes, function (key, item) {
-            if (item.id == id){
-                if (item.partnerMax > 0){
-                    for (var i=item.partnerMin; i <= item.partnerMax; i++) {
-                        var partner = '<input type="text" id="name_' + i + '" class="form-control form-control-text" placeholder="Partner Name" />' +
-                            '<input type="email" id="email_' + i + '" class="form-control form-control-text" placeholder="Partner Email" />' + 
-                            '<input type="text" id="license_' + i + '" placeholder="Partner Tax License" class="form-control form-control-text" />' + 
-                            '<label><input type="checkbox" id="tempLicense_' + i + '" class="partnerLicense" /> This partner needs a temporary license.</label><br/>'
-                        $("#partnerList").append(partner);
-                        if (i != item.partnerMax){$("#partnerList").append("<br/>");}
-                    }
-		            var partners = dealerPartners.split(', ');
-	                var partnerCount = 0;
-                    var partner1 = {};
-	                var partner2 = {};
-	                var partner3 = {};
-                    $.each(partners, function(key, item) {
-		                if (item.indexOf("name_1") > -1 && item.split(':')[1].trim() != "") {
-			                partnerCount = partnerCount + 1;
-		                }
-		                if (item.indexOf("name_2") > -1 && item.split(':')[1].trim() != "") {
-			                partnerCount = partnerCount + 1;
-		                }
-		                if (item.indexOf("_1") > -1) {
-			                var p1 = item.split(':');
-			                partner1[p1[0]] = p1[1];
-		                }
-		                if (item.indexOf("_2") > -1) {
-			                var p2 = item.split(':');
-			                partner2[p2[0]] = p2[1];
-		                }
-		                if (item.indexOf("_3") > -1) {
-			                var p3 = item.split(':');
-			                partner3[p3[0]] = p3[1];
-		                }
-	                });
-
-                    if (!$.isEmptyObject(partner1)) {
-                        $("#name_1").val(partner1.name_1.trim());
-                        $("#email_1").val(partner1.email_1.trim());
-                        $("#license_1").val(partner1.license_1.trim());
-                        $("#tempLicense_1").on('click',partnerLicense);
-                        if (partner1.tempLicense_1.indexOf('true') > -1){ 
-                            $("#tempLicense_1").click();
-                        }
-                    }
-                    if (!$.isEmptyObject(partner2)) {
-                        $("#name_2").val(partner2.name_2.trim());
-                        $("#email_2").val(partner2.email_2.trim());
-                        $("#license_2").val(partner2.license_2.trim());
-                        $("#tempLicense_2").on('click',partnerLicense);
-                        if (partner2.tempLicense_2.indexOf('true') > -1){ 
-                            $("#tempLicense_2").click();
-                        }
-                    }
-                    if (!$.isEmptyObject(partner3)) {
-                        $("#name_3").val(partner3.name_3.trim());
-                        $("#email_3").val(partner3.email_3.trim());
-                        $("#license_3").val(partner3.license_3.trim());
-                        $("#tempLicense_3").on('click',partnerLicense);
-                        if (partner3.tempLicense_3.indexOf('true') > -1){ 
-                            $("#tempLicense_3").click();
-                        }
-                    }
-                    if (partnerCount == item.partnerMax) {
-                        $('#billingInfo').empty();
-                        $('#billingInfo').append("You already have the maximum allowed partners for this table type. Please contact <a href='mailto:marketplace@furthemore.org'>marketplace@furthemore.org</a> if you believe this is an error.");                        
-                    }
-                    $("#partnerList").append("<span class='small'>If any partner will be selling their own merchandice, they must provide their license number or request a temporary license from the convention.</span>");
-                }
-            }
-        });     
-    };
-
-    $("#tempLicense").on("click", function () {
-        if ($(this).is(":checked")) {
-            $("#license").val("temporary").attr("disabled", "disabled");
-        } else {
-            $("#license").val("").removeAttr("disabled");
-        }
-    });
-    function partnerLicense() {
-        var id = this.id.split('_')[1];
-        if ($(this).is(":checked")) {
-            $("#license_" + id).val("temporary").attr("disabled", "disabled");
-        } else {
-            $("#license_" + id).val("").removeAttr("disabled");
-        }
+    
+    for (var i=dealerPartners.length; i <= maxPartners; i++) {
+        var partner = '<div class="partnerGroup"><input type="text" id="name_" + i + " class="form-control form-control-text" placeholder="Partner Name" />' +
+                      '<input type="email" id="email_" + i  class="form-control form-control-text" placeholder="Partner Email" /></div>'
+        $("#partnerList").append(partner);
+        if (i != maxPartners){$("#partnerList").append("<br/>");}
     }
 
     function getAssistants() {
-        var partners = "";
-        var partnerList = $("#partnerList input");
+        var partners = [];
+        var partnerList = $(".partnerGroup");
         $.each(partnerList, function(key, item) {
-            if ($(item).is(':checkbox')) {
-                partners += item.id + ": " + $(item).is(':checked') + ", ";                 
-            } else {
-                partners += item.id + ": " + $(item).val() + ", "; 
+            var partner = {};
+            var itemList = $(item).find("input")
+            var hasValues = false;
+            $.each(itemList, function(key2, item2){
+                var id = item2.id.split('_')[0];
+                if ($(item2).val() != ""){ hasValues = true; }
+                partner[id] = $(item2).val(); 
+            });
+            if (hasValues){ 
+                partner['license'] = 'NA';
+                partners.push(partner);
             }
         });
-        return partners;		
+        return partners;
     }
+
+    $(".partnerGroup input").keyup(function (e) {
+        var partners = getAssistants();
+        $("#total").text("$" + 45*partners.length + ".00");
+    });
 
 	$("#checkout").click(function (e) {
 		e.preventDefault();
@@ -350,21 +282,22 @@ var paymentForm = new SqPaymentForm({
 
 		$("#checkout").attr("disabled", "disabled");
 
-        paymentForm.requestCardNonce();
+        	paymentForm.requestCardNonce();
 
 	});
 
-function doCheckout() {
+    function doCheckout(card_data) {
 
 		var data = {
 		    'dealer': {'id': {{dealer.id}} },
 		    'billingData': {
-                'nonce': $("#card-nonce").val(), 'breakfast': $("#asstbreakfast").is(':checked'),
-		    	'cc_firstname': $("#fname").val(), 'cc_lastname': $("#lname").val(), 'email': $("#email").val(),
-                'address1': $("#add1").val(), 'address2': $("#add2").val(), 'city': $("#city").val(),
-                'state': $("#state").val(), 'country': $("#country").val(), 'postal': $("#zip").val(),
+                    'nonce': $("#card-nonce").val(), 'breakfast': $("#asstbreakfast").is(':checked'),
+		    'cc_firstname': $("#fname").val(), 'cc_lastname': $("#lname").val(), 'email': $("#email").val(),
+                    'address1': $("#add1").val(), 'address2': $("#add2").val(), 'city': $("#city").val(),
+                    'state': $("#state").val(), 'country': $("#country").val(), 'postal': $("#zip").val(),
+                    'card_data': card_data,
 		    },
-            'assistants': getAssistants()
+                    'assistants': getAssistants()
 		};
 
 		$.ajax({
@@ -377,25 +310,20 @@ function doCheckout() {
 		        $.ajaxSettings.beforeSend(xhr, settings);
 		    },
 		    "error": function(result, status, error) {
-                alert("An error has occurred. If this error continues, please contact marketplace@furthemore.org for assistence.")
+                	alert("An error has occurred. If this error continues, please contact {{ event.dealerEmail }} for assistance.")
 	    		$("#checkout").removeAttr("disabled");
 		    },
             "success": function (result, status) {
                 if (result.success) {
-		    		window.location = "{% url 'doneAsstDealer' %}";
+                    window.location = "{% url 'doneAsstDealer' %}";
                 } else {
-                    if (result.message.indexOf('confirmation email') > -1){
-                        alert(result.message);
-    		    		window.location = "{% url 'doneAsstDealer' %}";
-                    } else {
-                        alert("An error has occurred: " + result.message + " If this error continues, please contact marketplace@furthemore.org for assistence.");
-    			       $("#checkout").removeAttr("disabled");
-                    }
-			    }
+                        alert("An error has occurred: " + result.message + " If this error continues, please contact {{ event.dealerEmail }} for assistance.");
+    			$("#checkout").removeAttr("disabled");
+		}
             }
-		});
+	});
 
-}
+    }
 
 
 function getCookie(name) {

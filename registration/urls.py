@@ -1,5 +1,6 @@
-from django.conf.urls import url
+from django.conf.urls import url, include
 from django.contrib.auth import views as auth_views
+from django.conf import settings
 
 from . import views
 
@@ -25,8 +26,10 @@ urlpatterns = [
     url(r'^newstaff/done/?$', views.staffDone, name='doneNewStaff'),
     url(r'^newstaff/lookup/?$', views.findNewStaff, name='findNewStaff'),
     url(r'^newstaff/info/?$', views.infoNewStaff, name='infoNewStaff'),
-    url(r'^newstaff/add/?$', views.addNewStaff, name='addNewStaff'),
-    url(r'^newstaff/(?P<guid>\w+)/?$', views.newStaff, name='newstaff'),    
+    url(r'^staff/?$', views.infoNewStaff, name='test'),
+	url(r'^newstaff/add/?$', views.addNewStaff, name='addNewStaff'),
+    url(r'^newstaff/(?P<guid>\w+)/?$', views.newStaff, name='newstaff'),
+    url(r'^newstaff/?$', views.newStaff, name='newstaff'), #ADDED TO HANDLE NULL TOKENS      
 
     url(r'^dealer/?$', views.newDealer, name='newDealer'),
     url(r'^dealer/addNew/?$', views.addNewDealer, name='addNewDealer'),
@@ -61,6 +64,7 @@ urlpatterns = [
     url(r'^onsite/register/badge/assign/?$', views.assignBadgeNumber, name='assignBadgeNumber'),
     url(r'^onsite/register/badge/print/?$', views.onsitePrintBadges, name='onsitePrintBadges'),
     url(r'^onsite/square/complete/?$', views.completeSquareTransaction, name='completeSquareTransaction'),
+    url(r'^onsite/cash/complete/?$', views.completeCashTransaction, name='completeCashTransaction'),
 
     url(r'^onsite/signature/?$', views.onsiteSignature, name='onsiteSignature'),
 
@@ -75,6 +79,9 @@ urlpatterns = [
     url(r'^events/?$', views.getEvents, name='events'),
     url(r'^departments/?$', views.getDepartments, name='departments'),
     url(r'^alldepartments/?$', views.getAllDepartments, name='alldepartments'),
+    url(r'^divmaps/?$', views.getDivisionMapping, name='divmaps'),
+    url(r'^divisions/?$', views.getDivisions, name='getdivisions'),
+    url(r'^titles/?$', views.getTitles, name='titles'),
     url(r'^pricelevels/?$', views.getPriceLevels, name='pricelevels'),
     url(r'^adultpricelevels/?$', views.getAdultPriceLevels, name='adultpricelevels'),
     url(r'^minorpricelevels/?$', views.getMinorPriceLevels, name='minorpricelevels'),
@@ -96,3 +103,9 @@ urlpatterns = [
     url(r'^firebase/lookup/?', views.firebaseLookup, name='firebaseLookup'),
 
 ]
+
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns = [
+        url(r'^__debug__/', include(debug_toolbar.urls)),
+    ] + urlpatterns

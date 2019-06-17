@@ -1,2 +1,3 @@
-Welcome to Furthemore Staff! 
-Use this link to register as staff: https://www.furthemore.org/apis/registration/staff/{{registrationToken}}
+{% load site %}
+Welcome to {{event}} Staff! 
+Use this link to register as staff: https://{% current_domain %}{% url 'staff' guid=registrationToken %}

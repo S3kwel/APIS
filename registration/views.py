@@ -1,4 +1,4 @@
-from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.admin.views.decorators import staff_member_required, user_passes_test
 from django.core.serializers.json import DjangoJSONEncoder
 from django.forms.models import model_to_dict
 from django.http import HttpResponse, HttpResponseServerError, JsonResponse
@@ -6,7 +6,7 @@ from django.shortcuts import render, redirect
 from django.template.response import TemplateResponse
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
+from django.db.models import Q, Max
 from django.utils import timezone
 from django.conf import settings
 try:
@@ -25,20 +25,25 @@ import random
 import string
 import logging
 
-from .emails import *
 from .models import *
 from .payments import chargePayment
 from .pushy import PushyAPI
+import emails
 import printing
 
 # Create your views here.
 logger = logging.getLogger("django.request")
 
 def index(request):
-    event = Event.objects.get(default=True)
+    try:
+        event = Event.objects.get(default=True)
+    except Event.DoesNotExist:
+        return render(request, 'registration/docs/no-event.html')
+        
+        
     tz = timezone.get_current_timezone()
     today = tz.localize(datetime.now())
-    context = {'event':event}
+    context = { 'event' : event }
     if event.attendeeRegStart <= today <= event.attendeeRegEnd:
         return render(request, 'registration/registration-form.html', context)
     return render(request, 'registration/closed.html', context)
@@ -47,29 +52,61 @@ def flush(request):
     request.session.flush()
     return JsonResponse({'success': True})
 
+# Generator to require a user to be part of a group to access a view
+# e.g. apply with:
+#   @user_passes_test(in_group('Manager'))
+# to require user to be a member of the 'Manager' group to continue
+def in_group(groupname):
+    def inner(user):
+        return user.groups.filter(name=groupname).exists()
+    return inner
+
 
 ###################################
 # Payments
 
-def doCheckout(billingData, total, discount, orderItems, donationOrg, donationCharity, ip):
+def doCheckout(billingData, total, discount, cartItems, orderItems, donationOrg, donationCharity, ip):
+    event = Event.objects.get(default=True)
     reference = getConfirmationToken()
-    while Order.objects.filter(reference=reference).count() > 0:
+    while Order.objects.filter(reference=reference).exists():
         reference = getConfirmationToken()
-
+        
     order = Order(total=Decimal(total), reference=reference, discount=discount,
-                  orgDonation=donationOrg, charityDonation=donationCharity,
-                  billingName=billingData['cc_firstname'] + " " + billingData['cc_lastname'],
-                  billingAddress1=billingData['address1'], billingAddress2=billingData['address2'],
-                  billingCity=billingData['city'], billingState=billingData['state'], billingCountry=billingData['country'],
-                  billingPostal=billingData['postal'], billingEmail=billingData['email'])
-    order.save()
+                  orgDonation=donationOrg, charityDonation=donationCharity)
 
-    status, response = chargePayment(order.id, billingData, ip)
+    # Address collection is marked as required by event
+    if event.collectBillingAddress:
+        try:
+            order.billingName="{0} {1}".format(billingData['cc_firstname'], billingData['cc_lastname'])
+            order.billingAddress1=billingData['address1']
+            order.billingAddress2=billingData['address2']
+            order.billingCity=billingData['city']
+            order.billingState=billingData['state']
+            order.billingCountry=billingData['country']
+            order.billingEmail=billingData['email']
+        except KeyError as e:
+            abort(400, "Address collection is required, but request is missing required field: {0}".format(e))
+
+    # Otherwise, no need for anything except postal code (Square US/CAN)
+    try:
+        card_data = billingData['card_data']
+        order.billingPostal = card_data['billing_postal_code']
+        order.lastFour = card_data['last_4']
+    except KeyError as e:
+        abort(400, "A required field was missing from billingData: {0}".format(e))
+        
+    status, response = chargePayment(order, billingData, ip)
 
     if status:
-        for oitem in orderItems:
-            oitem.order = order
-            oitem.save()
+        if cartItems:
+            for item in cartItems:
+                orderItem = saveCart(item)
+                orderItem.order = order
+                orderItem.save()
+        elif orderItems:
+            for oitem in orderItems:
+                oitem.order = order
+                oitem.save()
         order.status = 'Paid'
         order.save()
         if discount:
@@ -80,22 +117,37 @@ def doCheckout(billingData, total, discount, orderItems, donationOrg, donationCh
     return False, response, order
 
 
-def doZeroCheckout(attendee, discount, orderItems):
+def doZeroCheckout(discount, cartItems, orderItems):
+    if cartItems:
+        attendee = json.loads(cartItems[0].formData)['attendee']
+        billingName = "{firstName} {lastName}".format(**attendee)
+        billingEmail = attendee['email']
+    elif orderItems:
+        attendee = orderItems[0].badge.attendee
+        billingName = "{0} {1}".format(attendee.firstName, attendee.lastName)
+        billingEmail = attendee.email
+
+
     reference = getConfirmationToken()
     while Order.objects.filter(reference=reference).count() > 0:
         reference = getConfirmationToken()
 
+    logger.debug(attendee)
     order = Order(total=0, reference=reference, discount=discount,
-                  orgDonation=0, charityDonation=0, billingName=attendee.firstName + " " + attendee.lastName,
-                  billingAddress1=attendee.address1, billingAddress2=attendee.address2,
-                  billingCity=attendee.city, billingState=attendee.state, billingCountry=attendee.country,
-                  billingPostal=attendee.postalCode, billingEmail=attendee.email, status="Complete")
+                  orgDonation=0, charityDonation=0, status="Complete",
+                  billingType=Order.COMP, billingEmail=billingEmail,
+                  billingName=billingName)
     order.save()
-    email = attendee.email
 
-    for oitem in orderItems:
-        oitem.order = order
-        oitem.save()
+    if cartItems:
+        for item in cartItems:
+            orderItem = saveCart(item)
+            orderItem.order = order
+            orderItem.save()
+    elif orderItems:
+        for oitem in orderItems:
+            oitem.order = order
+            oitem.save()
 
     if discount:
         discount.used = discount.used + 1
@@ -103,37 +155,82 @@ def doZeroCheckout(attendee, discount, orderItems):
     return True, "", order
 
 
-def getTotal(orderItems, disc = ""):
-    total = 0
-    if not orderItems: return total
-    for item in orderItems:
-        itemSubTotal = item.priceLevel.basePrice
-        effLevel = item.badge.effectiveLevel()
-        if effLevel:
-            itemTotal = itemSubTotal - effLevel.basePrice
+def getCartItemOptionTotal(options):
+    optionTotal = 0
+    for option in options:
+        optionData = PriceLevelOption.objects.get(id=option['id'])
+        if optionData.optionExtraType == 'int':
+            if option['value']:
+                optionTotal += (optionData.optionPrice*Decimal(option['value']))
         else:
-            itemTotal = itemSubTotal
+            optionTotal += optionData.optionPrice
+    return optionTotal
 
-        for option in item.attendeeoptions_set.all():
-            if option.option.optionExtraType == 'int':
-                if option.optionValue:
-                    itemTotal += (option.option.optionPrice*Decimal(option.optionValue))
-            else:
-                itemTotal += option.option.optionPrice
+def getOrderItemOptionTotal(options):
+    optionTotal = 0
+    for option in options:
+        if option.option.optionExtraType == 'int':
+            if option.optionValue:
+                optionTotal += (option.option.optionPrice*Decimal(option.optionValue))
+        else:
+            optionTotal += option.option.optionPrice
+    return optionTotal
+
+def getDiscountTotal(disc, subtotal):
+    discount = Discount.objects.get(codeName=disc)
+    if discount.isValid():
+        if discount.amountOff:
+            return discount.amountOff
+        elif discount.percentOff:
+            return Decimal(float(subtotal) * float(discount.percentOff)/100)
+
+
+
+def getTotal(cartItems, orderItems, disc = ""):
+    total = 0
+    total_discount = 0
+    if not cartItems and not orderItems:
+        return 0, 0
+    for item in cartItems:
+        postData = json.loads(str(item.formData))
+        pdp = postData['priceLevel']
+        priceLevel = PriceLevel.objects.get(id=pdp['id'])
+        itemTotal = priceLevel.basePrice
+
+        options = pdp['options']
+        itemTotal += getCartItemOptionTotal(options)
 
         if disc:
-            discount = Discount.objects.get(codeName=disc)
-            if discount.isValid():
-              if discount.amountOff:
-                itemTotal -= discount.amountOff
-              elif discount.percentOff:
-                itemTotal -= Decimal(float(itemTotal) * float(discount.percentOff)/100)
+            discount = getDiscountTotal(disc, itemTotal)
+            total_discount += discount
+            itemTotal -= discount
 
         if itemTotal > 0:
             total += itemTotal
-    return total
 
-def getDealerTotal(orderItems, dealer):
+    for item in orderItems:
+        itemSubTotal = item.priceLevel.basePrice
+        effLevel = item.badge.effectiveLevel()
+        # FIXME Why was this here?
+        #if effLevel:
+        #    itemTotal = itemSubTotal - effLevel.basePrice
+        #else:
+        itemTotal = itemSubTotal
+
+        itemTotal += getOrderItemOptionTotal(item.attendeeoptions_set.all())
+
+        if disc:
+            discount = getDiscountTotal(disc, itemTotal)
+            total_discount += discount
+            itemTotal -= discount
+
+        # FIXME Why?
+        if itemTotal > 0:
+            total += itemTotal
+
+    return total, total_discount
+
+def getDealerTotal(orderItems, discount, dealer):
     itemSubTotal = 0
     for item in orderItems:
         itemSubTotal = item.priceLevel.basePrice
@@ -143,15 +240,20 @@ def getDealerTotal(orderItems, dealer):
                     itemSubTotal += (option.option.optionPrice*Decimal(option.optionValue))
             else:
                 itemSubTotal += option.option.optionPrice
-
     partnerCount = dealer.getPartnerCount()
     partnerBreakfast = 0
     if partnerCount > 0 and dealer.asstBreakfast:
       partnerBreakfast = 60*partnerCount
     wifi = 0
+    power = 0
     if dealer.needWifi:
         wifi = 50
-    total = itemSubTotal + 45*partnerCount + partnerBreakfast + dealer.tableSize.basePrice + wifi - dealer.discount
+    if dealer.needPower:
+        power = 15
+    paidTotal = dealer.paidTotal()
+    if discount:
+        itemSubTotal = getDiscountTotal(discount, itemSubTotal)
+    total = itemSubTotal + 45*partnerCount + partnerBreakfast + dealer.tableSize.basePrice + wifi + power - dealer.discount - paidTotal
     if total < 0:
       return 0
     return total
@@ -161,7 +263,11 @@ def applyDiscount(request):
     if dis:
         return JsonResponse({'success': False, 'message': 'Only one discount is allowed per order.'})
 
-    postData = json.loads(request.body)
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for applyDiscount()")
+        return JsonResponse({'success': False})
     dis = postData['discount']
 
     discount = Discount.objects.filter(codeName=dis)
@@ -178,19 +284,22 @@ def applyDiscount(request):
 ###################################
 # New Staff
 
-def newStaff(request, guid):
+def newStaff(request, guid='DEFAULT'):
     event = Event.objects.get(default=True)
     context = {'token': guid, 'event': event}
     return render(request, 'registration/staff/staff-new.html', context)
 
 def findNewStaff(request):
+  print("FINDNEWSTAFF");
   try:
     postData = json.loads(request.body)
     email = postData['email']
     token = postData['token']
-
-    token = TempToken.objects.get(email=__iexactemail, token=token)
+    if token == "DEFAULT":
+        return JsonResponse({'success': True, 'message':'STAFF'})
+        token = TempToken.objects.get(email__iexact=email, token=token)
     if not token:
+        print("NO TOKEN ")
         return HttpResponseServerError("No Staff Found")
 
     if token.validUntil < timezone.now():
@@ -205,22 +314,26 @@ def findNewStaff(request):
     logger.exception("Unable to find staff." + request.body)
     return HttpResponseServerError(str(e))
 
+# Current hard-coded to dump a blank form to users without a token set up.  
+# TODO: Eventually work this into the event w/ better handling 
 def infoNewStaff(request):
     event = Event.objects.get(default=True)
     try:
       tokenValue = request.session["newStaff"]
       token = TempToken.objects.get(token=tokenValue)
     except Exception as e:
-      token = None
+      context = {'staff': None, 'event': event, 'token': "DEFAULT"}
+      return render(request, 'registration/staff/staff-new-payment.html', context)
     context = {'staff': None, 'event': event, 'token': token}
     return render(request, 'registration/staff/staff-new-payment.html', context)
-
 def addNewStaff(request):
     postData = json.loads(request.body)
     #create attendee from request post
     pda = postData['attendee']
     pds = postData['staff']
-    pdp = postData['priceLevel']
+    #meant to try and preserve the normal price handling stuff.  
+    if "priceLevel" in request.body: 
+      pdp = postData['priceLevel']
     evt = postData['event']
 
     if evt:
@@ -228,6 +341,7 @@ def addNewStaff(request):
     else:
       event = Event.objects.get(default=True)
 
+	  
     tz = timezone.get_current_timezone()
     birthdate = tz.localize(datetime.strptime(pda['birthdate'], '%Y-%m-%d' ))
 
@@ -243,8 +357,6 @@ def addNewStaff(request):
     shirt = ShirtSizes.objects.get(id=pds['shirtsize'])
 
     staff = Staff(attendee=attendee, event=event)
-    staff.twitter = pds['twitter']
-    staff.telegram = pds['telegram']
     staff.shirtsize = shirt
     staff.specialSkills = pds['specialSkills']
     staff.specialFood = pds['specialFood']
@@ -252,30 +364,45 @@ def addNewStaff(request):
     staff.contactName = pds['contactName']
     staff.contactPhone = pds['contactPhone']
     staff.contactRelation = pds['contactRelation']
+    deptList = Department.objects.all()
+    dept_dict = {x.id: x for x in deptList}
+    divList = Division.objects.all()
+    div_dict = {x.id: x for x in divList}
+    titleList = Title.objects.all()
+    title_dict = {x.id: x for x in titleList}
+    staff.department = dept_dict[int(pds['department'])]
+    staff.division = div_dict[int(pds['division'])]
+    staff.title = title_dict[int(pds['title'])]
+    staff.accommodationType = pds['accommodationType']
+    staff.roommateRequests = pds['roommateRequests']
+    staff.roomateBlacklist = pds['roomateBlacklist']
+    staff.discord = pds['discord']
+    
+    #Staff.objects.all().delete()
     staff.save()
 
-    priceLevel = PriceLevel.objects.get(id=int(pdp['id']))
+    if "priceLevel" in request.body: 
+      priceLevel = PriceLevel.objects.get(id=int(pdp['id']));
+      orderItem = OrderItem(badge=badge, priceLevel=priceLevel, enteredBy="WEB")
+      orderItem.save()
 
-    orderItem = OrderItem(badge=badge, priceLevel=priceLevel, enteredBy="WEB")
-    orderItem.save()
+      for option in pdp['options']:
+          plOption = PriceLevelOption.objects.get(id=int(option['id']))
+          attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
+          attendeeOption.save()
 
-    for option in pdp['options']:
-        plOption = PriceLevelOption.objects.get(id=int(option['id']))
-        attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
-        attendeeOption.save()
+      orderItems = request.session.get('order_items', [])
+      orderItems.append(orderItem.id)
+      request.session['order_items'] = orderItems
 
-    orderItems = request.session.get('order_items', [])
-    orderItems.append(orderItem.id)
-    request.session['order_items'] = orderItems
+      discount = event.newStaffDiscount
+      if discount:
+          request.session["discount"] = discount.codeName
 
-    discount = event.newStaffDiscount
-    if discount:
-        request.session["discount"] = discount.codeName
-
-    tokens = TempToken.objects.filter(email=attendee.email)
-    for token in tokens:
-        token.used = True
-        token.save()
+    # tokens = TempToken.objects.filter(email=attendee.email)
+    # for token in tokens:
+        # token.used = True
+        # token.save()
 
     return JsonResponse({'success': True})
 
@@ -297,29 +424,30 @@ def staffDone(request):
 
 
 def findStaff(request):
-  try:
-    postData = json.loads(request.body)
-    email = postData['email']
-    token = postData['token']
+    try:
+        postData = json.loads(request.body)
+        email = postData['email']
+        token = postData['token']
 
-    staff = Staff.objects.get(attendee__email__iexact=email, registrationToken=token)
-    if not staff:
-      return HttpResponseServerError("No Staff Found")
+        staff = Staff.objects.get(attendee__email__iexact=email, registrationToken=token)
+        if not staff:
+            return HttpResponseServerError("No Staff Found")
 
-    request.session['staff_id'] = staff.id
-    return JsonResponse({'success': True, 'message':'STAFF'})
-  except Exception as e:
-    logger.exception("Unable to find staff." + request.body)
-    return HttpResponseServerError(str(e))
+        request.session['staff_id'] = staff.id
+        return JsonResponse({'success': True, 'message':'STAFF'})
+    except Exception as e:
+        logger.warning("Unable to find staff. " + request.body)
+        return HttpResponseServerError(str(e))
 
 
 def infoStaff(request):
+    print("INFOSTAFF CALLED")
     event = Event.objects.get(default=True)
     context = {'staff': None, 'event': event}
     try:
-      staffId = request.session['staff_id']
+        staffId = request.session['staff_id']
     except Exception as e:
-      return render(request, 'registration/staff-payment.html', context)
+        return render(request, 'registration/staff-payment.html', context)
 
     staff = Staff.objects.get(id=staffId)
     if staff:
@@ -338,7 +466,14 @@ def infoStaff(request):
 
 
 def addStaff(request):
-    postData = json.loads(request.body)
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for addStaff()")
+        return JsonResponse({'success': False})
+
+    event = Event.objects.get(default=True)
+
     #create attendee from request post
     pda = postData['attendee']
     pds = postData['staff']
@@ -436,6 +571,64 @@ def addStaff(request):
 
     return JsonResponse({'success': True})
 
+def checkoutStaff(request):
+    sessionItems = request.session.get('order_items', [])
+    pdisc = request.session.get('discount', "")
+    staffId = request.session['staff_id']
+    orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for checkoutStaff()")
+        return JsonResponse({'success': False})
+
+    discount = Discount.objects.get(codeName="StaffDiscount")
+    staff = Staff.objects.get(id=staffId)
+    subtotal = getStaffTotal(orderItems, discount, staff)
+
+    if subtotal == 0:
+      status, message, order = doZeroCheckout(discount, None, orderItems)
+      if not status:
+          return JsonResponse({'success': False, 'message': message})
+
+      request.session.flush()
+      try:
+          emails.sendStaffRegistrationEmail(order.id)
+      except Exception as e:
+          logger.exception("Error emailing StaffRegistrationEmail - zero sum.")
+          staffEmail = getStaffEmail()
+          return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact {0} to get your confirmation number.".format(staffEmail)})
+      return JsonResponse({'success': True})
+
+
+
+    pbill = postData["billingData"]
+    porg = Decimal(postData["orgDonation"].strip() or '0.00')
+    pcharity = Decimal(postData["charityDonation"].strip() or '0.00')
+    if porg < 0:
+        porg = 0
+    if pcharity < 0:
+        pcharity = 0
+
+    total = subtotal + porg + pcharity
+    ip = get_client_ip(request)
+
+    status, message, order = doCheckout(pbill, total, discount, orderItems, porg, pcharity, ip)
+
+    if status:
+        clear_session(request)
+        try:
+            emails.sendStaffRegistrationEmail(order.id)
+        except Exception as e:
+            logger.exception("Error emailing StaffRegistrationEmail.")
+            staffEmail = getStaffEmail()
+            return abort(400, "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact {0} to get your confirmation number.".format(staffEmail))
+        return success()
+    else:
+        order.delete()
+        return abort(400, message)
+
+
 
 ###################################
 # Dealers
@@ -451,7 +644,8 @@ def thanksDealer(request):
     return render(request, 'registration/dealer/dealer-thanks.html', context)
 
 def updateDealer(request):
-    context = {}
+    event = Event.objects.get(default=True)
+    context = {'event': event}
     return render(request, 'registration/dealer/dealer-update.html', context)
 
 def doneDealer(request):
@@ -460,11 +654,13 @@ def doneDealer(request):
     return render(request, 'registration/dealer/dealer-done.html', context)
 
 def dealerAsst(request, guid):
-    context = {'token': guid}
+    event = Event.objects.get(default=True)
+    context = {'token': guid, 'event': event}
     return render(request, 'registration/dealer/dealerasst-locate.html', context)
 
 def doneAsstDealer(request):
-    context = {}
+    event = Event.objects.get(default=True)
+    context = {'event': event}
     return render(request, 'registration/dealer/dealerasst-done.html', context)
 
 def newDealer(request):
@@ -489,7 +685,10 @@ def infoDealer(request):
         badge = Badge.objects.filter(attendee=dealer.attendee, event=dealer.event).last()
         dealer_dict = model_to_dict(dealer)
         attendee_dict = model_to_dict(dealer.attendee)
-        badge_dict = model_to_dict(badge)
+        if badge is not None:
+            badge_dict = model_to_dict(badge)
+        else:
+            badge_dict = {}
         table_dict = model_to_dict(dealer.tableSize)
 
         context = {'dealer': dealer, 'badge': badge, 'event': dealer.event,
@@ -500,56 +699,89 @@ def infoDealer(request):
     return render(request, 'registration/dealer/dealer-payment.html', context)
 
 def findDealer(request):
-  try:
-    postData = json.loads(request.body)
-    email = postData['email']
-    token = postData['token']
+    try:
+        postData = json.loads(request.body)
+        email = postData['email']
+        token = postData['token']
 
-    dealer = Dealer.objects.get(attendee__email__iexact=email, registrationToken=token)
-    if not dealer:
-      return HttpResponseServerError("No Dealer Found")
+        dealer = Dealer.objects.get(attendee__email__iexact=email, registrationToken=token)
+        if not dealer:
+            return HttpResponseServerError("No Dealer Found " + email)
 
-    request.session['dealer_id'] = dealer.id
-    return JsonResponse({'success': True, 'message':'DEALER'})
-  except Exception as e:
-    logger.exception("Error finding dealer.")
-    return HttpResponseServerError(str(e))
+        request.session['dealer_id'] = dealer.id
+        return JsonResponse({'success': True, 'message':'DEALER'})
+    except Exception as e:
+        logger.exception("Error finding dealer. " + email)
+        return HttpResponseServerError(str(e))
 
 def findAsstDealer(request):
-  try:
-    postData = json.loads(request.body)
-    email = postData['email']
-    token = postData['token']
+    try:
+        postData = json.loads(request.body)
+        email = postData['email']
+        token = postData['token']
 
-    dealer = Dealer.objects.get(attendee__email__iexact=email, registrationToken=token)
-    if not dealer:
-      return HttpResponseServerError("No Dealer Found")
+        dealer = Dealer.objects.get(attendee__email__iexact=email, registrationToken=token)
+        if not dealer:
+            return HttpResponseServerError("No Dealer Found")
 
-    request.session['dealer_id'] = dealer.id
-    return JsonResponse({'success': True, 'message':'DEALER'})
-  except Exception as e:
-    logger.exception("Error finding assistant dealer.")
-    return HttpResponseServerError(str(e))
+        request.session['dealer_id'] = dealer.id
+        return JsonResponse({'success': True, 'message':'DEALER'})
+    except Exception as e:
+        logger.exception("Error finding assistant dealer.")
+        return HttpResponseServerError(str(e))
+
+
+def invoiceDealer(request):
+    sessionItems = request.session.get('order_items', [])
+    sessionDiscount = request.session.get('discount', "")
+    if not sessionItems:
+        context = {'orderItems': [], 'total': 0, 'discount': {}}
+        request.session.flush()
+    else:
+        dealerId = request.session.get('dealer_id', -1)
+        if dealerId == -1:
+            context = {'orderItems': [], 'total': 0, 'discount': {}}
+            request.session.flush()
+        else:
+            dealer = Dealer.objects.get(id=dealerId)
+            orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
+            discount = Discount.objects.filter(codeName=sessionDiscount).first()
+            total = getDealerTotal(orderItems, discount, dealer)
+            context = {'orderItems': orderItems, 'total': total, 'discount': discount, 'dealer': dealer}
+    event = Event.objects.get(default=True)
+    context['event'] = event
+    return render(request, 'registration/dealer/dealer-checkout.html', context)
 
 
 def addAsstDealer(request):
     context = {'attendee': None, 'dealer': None}
     try:
-      dealerId = request.session['dealer_id']
+        dealerId = request.session['dealer_id']
     except Exception as e:
-      return render(request, 'registration/dealer/dealerasst-add.html', context)
+        return render(request, 'registration/dealer/dealerasst-add.html', context)
 
     dealer = Dealer.objects.get(id=dealerId)
     if dealer.attendee:
-      context = {'attendee': dealer.attendee, 'dealer': dealer}
+        assts = list(DealerAsst.objects.filter(dealer=dealer))
+        assistants = []
+        for dasst in assts:
+            assistants.append(model_to_dict(dasst))
+        context = {'attendee': dealer.attendee, 'dealer': dealer, 'asstCount': len(assts), 'jsonAssts': json.dumps(assistants, default=handler)}
+    event = Event.objects.get(default=True)
+    context['event'] = event
     return render(request, 'registration/dealer/dealerasst-add.html', context)
 
 def checkoutAsstDealer(request):
-    postData = json.loads(request.body)
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for checkoutAsstDealer()")
+        return JsonResponse({'success': False})
     pbill = postData["billingData"]
     assts = postData['assistants']
     dealerId = request.session['dealer_id']
     dealer = Dealer.objects.get(id=dealerId)
+    event = Event.objects.get(default=True)
 
     badge = Badge.objects.filter(attendee=dealer.attendee, event=dealer.event).last()
 
@@ -562,33 +794,44 @@ def checkoutAsstDealer(request):
     orderItem = OrderItem(badge=badge, priceLevel=priceLevel, enteredBy="WEB")
     orderItem.save()
 
-    dealer.partners = assts
-    dealer.save()
+    #dealer.partners = assts
+    for assistant in assts:
+        dasst = DealerAsst(dealer=dealer,event=event,name=assistant['name'],email=assistant['email'],license=assistant['license'])
+        dasst.save()
     partnerCount = dealer.getPartnerCount()
 
+    # FIXME: remove hardcoded costs
     partners = partnerCount - originalPartnerCount
     total = Decimal(45*partners)
     if pbill['breakfast']:
         total = total + Decimal(60*partners)
     ip = get_client_ip(request)
 
-    status, message, order = doCheckout(pbill, total, None, [orderItem], 0, 0, ip)
+    status, message, order = doCheckout(pbill, total, None, [], [orderItem], 0, 0, ip)
 
     if status:
         request.session.flush()
         try:
-            sendDealerAsstEmail(dealer.id)
+            emails.sendDealerAsstEmail(dealer.id)
         except Exception as e:
             logger.exception("Error emailing DealerAsstEmail.")
-            return JsonResponse({'success': False, 'message': "Your payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact marketplace@furthemore.org to get your confirmation number."})
+            dealerEmail = getDealerEmail()
+            return JsonResponse({'success': False, 'message': "Your payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact {0} to get your confirmation number.".format(dealerEmail)})
         return JsonResponse({'success': True})
     else:
-        order.delete()
+        orderItem.delete()
+        for assistant in assts:
+            assistant.delete()
         return JsonResponse({'success': False, 'message': message})
 
 
 def addDealer(request):
-    postData = json.loads(request.body)
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for addStaff()")
+        return JsonResponse({'success': False})
+
     pda = postData['attendee']
     pdd = postData['dealer']
     evt = postData['event']
@@ -677,132 +920,125 @@ def addDealer(request):
 
     return JsonResponse({'success': True})
 
-def invoiceDealer(request):
-    sessionItems = request.session.get('order_items', [])
-    if not sessionItems:
-        context = {'orderItems': [], 'total': 0}
-        request.session.flush()
-    else:
-        dealerId = request.session.get('dealer_id', -1)
-        if dealerId == -1:
-            context = {'orderItems': [], 'total': 0}
-            request.session.flush()
-        else:
-            dealer = Dealer.objects.get(id=dealerId)
-            orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
-            total = getDealerTotal(orderItems, dealer)
-            context = {'orderItems': orderItems, 'total': total, 'dealer': dealer}
-    return render(request, 'registration/dealer/dealer-checkout.html', context)
-
 def checkoutDealer(request):
-  try:
-    sessionItems = request.session.get('order_items', [])
-    orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
-    orderItem = orderItems[0]
-    if 'dealer_id' not in request.session:
-        return HttpResponseServerError("Session expired")
+    try:
+        sessionItems = request.session.get('order_items', [])
+        pdisc = request.session.get('discount', "")
+        orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
+        orderItem = orderItems[0]
+        if 'dealer_id' not in request.session:
+            return HttpResponseServerError("Session expired")
 
-    dealer = Dealer.objects.get(id=request.session.get('dealer_id'))
-    postData = json.loads(request.body)
-
-    subtotal = getDealerTotal(orderItems, dealer)
-
-    if subtotal == 0:
-
-      status, message, order = doZeroCheckout(dealer.attendee, None, orderItems)
-      if not status:
-          return JsonResponse({'success': False, 'message': message})
-
-      request.session.flush()
-
-      try:
-          dealer.resetToken()
-          sendDealerPaymentEmail(dealer, order)
-      except Exception as e:
-          logger.exception("Error sending DealerPaymentEmail - zero sum.")
-          return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact marketplace@furthemore.org."})
-      return JsonResponse({'success': True})
-
-    porg = Decimal(postData["orgDonation"].strip() or 0.00)
-    pcharity = Decimal(postData["charityDonation"].strip() or 0.00)
-    if porg < 0:
-        porg = 0
-    if pcharity < 0:
-        pcharity = 0
-
-    total = subtotal + porg + pcharity
-
-    pbill = postData['billingData']
-    ip = get_client_ip(request)
-    status, message, order = doCheckout(pbill, total, None, orderItems, porg, pcharity, ip)
-
-    if status:
-        request.session.flush()
+        dealer = Dealer.objects.get(id=request.session.get('dealer_id'))
         try:
-            dealer.resetToken()
-            sendDealerPaymentEmail(dealer, order)
-        except Exception as e:
-            logger.exception("Error sending DealerPaymentEmail." + request.body)
-            return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact marketplace@furthemore.org."})
-        return JsonResponse({'success': True})
-    else:
-        order.delete()
-        return JsonResponse({'success': False, 'message': message})
-  except Exception as e:
-    logger.exception("Error in dealer checkout." + request.body)
-    return HttpResponseServerError(str(e))
+            postData = json.loads(request.body)
+        except ValueError as e:
+            logger.error("Unable to decode JSON for checkoutDealer()")
+            return JsonResponse({'success': False})
 
+        discount = Discount.objects.filter(codeName=pdisc).first()
+        subtotal = getDealerTotal(orderItems, discount, dealer)
+
+        if subtotal == 0:
+
+            status, message, order = doZeroCheckout(discount, None, orderItems)
+            if not status:
+              return JsonResponse({'success': False, 'message': message})
+
+            request.session.flush()
+
+            try:
+                emails.sendDealerPaymentEmail(dealer, order)
+            except Exception as e:
+                logger.exception("Error sending DealerPaymentEmail - zero sum.")
+                dealerEmail = getDealerEmail()
+                return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact {0}".format(dealerEmail)})
+            return JsonResponse({'success': True})
+
+        porg = Decimal(postData["orgDonation"].strip() or '0.00')
+        pcharity = Decimal(postData["charityDonation"].strip() or '0.00')
+        if porg < 0:
+            porg = 0
+        if pcharity < 0:
+            pcharity = 0
+
+        total = subtotal + porg + pcharity
+
+        pbill = postData['billingData']
+        ip = get_client_ip(request)
+        status, message, order = doCheckout(pbill, total, discount, None, orderItems, porg, pcharity, ip)
+
+        if status:
+            request.session.flush()
+            try:
+                dealer.resetToken()
+                emails.sendDealerPaymentEmail(dealer, order)
+            except Exception as e:
+                logger.exception("Error sending DealerPaymentEmail. " + request.body)
+                dealerEmail = getDealerEmail()
+                return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact {0}".format(dealerEmail)})
+            return JsonResponse({'success': True})
+        else:
+            order.delete()
+            return JsonResponse({'success': False, 'message': message})
+    except Exception as e:
+        logger.exception("Error in dealer checkout.")
+        return HttpResponseServerError(str(e))
 
 def addNewDealer(request):
-  try:
-    postData = json.loads(request.body)
-    #create attendee from request post
-    pda = postData['attendee']
-    pdd = postData['dealer']
-    evt = postData['event']
-
-    tz = timezone.get_current_timezone()
-    birthdate = tz.localize(datetime.strptime(pda['birthdate'], '%Y-%m-%d' ))
-    event = Event.objects.get(name=evt)
-
-    attendee = Attendee(firstName=pda['firstName'], lastName=pda['lastName'], address1=pda['address1'], address2=pda['address2'],
-                        city=pda['city'], state=pda['state'], country=pda['country'], postalCode=pda['postal'],
-                        phone=pda['phone'], email=pda['email'], birthdate=birthdate,
-                        emailsOk=bool(pda['emailsOk']), surveyOk=bool(pda['surveyOk'])
-                        )
-    attendee.save()
-
-    badge = Badge(attendee=attendee, event=event, badgeName=pda['badgeName'])
-    badge.save()
-
-    tablesize = TableSize.objects.get(id=pdd['tableSize'])
-    dealer = Dealer(attendee=attendee, event=event, businessName=pdd['businessName'], logo=pdd['logo'],
-                    website=pdd['website'], description=pdd['description'], license=pdd['license'], needPower=pdd['power'],
-                    needWifi=pdd['wifi'], wallSpace=pdd['wall'], nearTo=pdd['near'], farFrom=pdd['far'], tableSize=tablesize,
-                    chairs=pdd['chairs'], reception=pdd['reception'], artShow=pdd['artShow'], charityRaffle=pdd['charityRaffle'],
-                    breakfast=pdd['breakfast'], willSwitch=pdd['switch'], tables=pdd['tables'],
-                    agreeToRules=pdd['agreeToRules'], buttonOffer=pdd['buttonOffer'], asstBreakfast=pdd['asstbreakfast']
-                    )
-    dealer.save()
-
-    partners = pdd['partners']
-    for partner in partners:
-        dealerPartner = DealerAsst(dealer=dealer, event=event, name=partner['name'],
-                                   email=partner['email'], license=partner['license'])
-        dealerPartner.save()
-
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for addNewDealer()")
+        return JsonResponse({'success': False})
 
     try:
-        sendDealerApplicationEmail(dealer.id)
+        #create attendee from request post
+        pda = postData['attendee']
+        pdd = postData['dealer']
+        evt = postData['event']
+
+        tz = timezone.get_current_timezone()
+        birthdate = tz.localize(datetime.strptime(pda['birthdate'], '%Y-%m-%d' ))
+        event = Event.objects.get(name=evt)
+
+        attendee = Attendee(firstName=pda['firstName'], lastName=pda['lastName'], address1=pda['address1'], address2=pda['address2'],
+                            city=pda['city'], state=pda['state'], country=pda['country'], postalCode=pda['postal'],
+                            phone=pda['phone'], email=pda['email'], birthdate=birthdate,
+                            emailsOk=bool(pda['emailsOk']), surveyOk=bool(pda['surveyOk'])
+                            )
+        attendee.save()
+
+        badge = Badge(attendee=attendee, event=event, badgeName=pda['badgeName'])
+        badge.save()
+
+        tablesize = TableSize.objects.get(id=pdd['tableSize'])
+        dealer = Dealer(attendee=attendee, event=event, businessName=pdd['businessName'], logo=pdd['logo'],
+                        website=pdd['website'], description=pdd['description'], license=pdd['license'], needPower=pdd['power'],
+                        needWifi=pdd['wifi'], wallSpace=pdd['wall'], nearTo=pdd['near'], farFrom=pdd['far'], tableSize=tablesize,
+                        chairs=pdd['chairs'], reception=pdd['reception'], artShow=pdd['artShow'], charityRaffle=pdd['charityRaffle'],
+                        breakfast=pdd['breakfast'], willSwitch=pdd['switch'], tables=pdd['tables'],
+                        agreeToRules=pdd['agreeToRules'], buttonOffer=pdd['buttonOffer'], asstBreakfast=pdd['asstbreakfast']
+                        )
+        dealer.save()
+    
+        partners = pdd['partners']
+        for partner in partners:
+            dealerPartner = DealerAsst(dealer=dealer, event=event, name=partner['name'],
+                                       email=partner['email'], license=partner['license'])
+            dealerPartner.save()
+
+        try:
+            emails.sendDealerApplicationEmail(dealer.id)
+        except Exception as e:
+            logger.exception("Error sending DealerApplicationEmail.")
+            dealerEmail = getDealerEmail()
+            return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact {0}.".format(dealerEmail)})
+        return JsonResponse({'success': True})
+
     except Exception as e:
-        logger.exception("Error sending DealerApplicationEmail." + request.body)
-        return JsonResponse({'success': False, 'message': "Your registration succeeded but we may have been unable to send you a confirmation email. If you have any questions, please contact marketplace@furthemore.org."})
-    return JsonResponse({'success': True})
-
-  except Exception as e:
-    logger.exception("Error in dealer addition." + request.body)
-    return HttpResponseServerError(str(e))
-
+        logger.exception("Error in dealer addition." + request.body)
+        return HttpResponseServerError(str(e))
 
 ###################################
 # Attendees - Onsite
@@ -823,7 +1059,7 @@ def onsiteCart(request):
         request.session.flush()
     else:
         orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
-        total = getTotal(orderItems)
+        total = getTotal([], orderItems)
         context = {'orderItems': orderItems, 'total': total}
     return render(request, 'registration/onsite-checkout.html', context)
 
@@ -837,6 +1073,7 @@ def onsiteAdmin(request):
     # Modify a dummy session variable to keep it alive
     request.session['heartbeat'] = time.time()
 
+    event = Event.objects.get(default=True)
     terminals = list(Firebase.objects.all())
     term = request.session.get('terminal', None)
     query = request.GET.get('search', None)
@@ -847,6 +1084,16 @@ def onsiteAdmin(request):
     # Set default payment terminal to use:
     if term is None and len(terminals) > 0:
         request.session['terminal'] = terminals[0].id
+
+    if len(terminals) == 0:
+        errors.append({
+            'type' : 'danger',
+            'code' : 'ERROR_NO_TERMINAL',
+            'text' : 'It looks like no payment terminals have been configured '
+            'for this server yet. Check that the APIS Terminal app is '
+            'running, and has been configured for the correct URL and API key.'
+        })
+
 
     # No terminal selection saved in session - see if one's
     # on the URL (that way it'll survive session timeouts)
@@ -862,14 +1109,10 @@ def onsiteAdmin(request):
             # weren't passed an integer
             errors.append({'type' : 'danger', 'text' : 'Invalid terminal specified'})
 
-
-    logger.info("Terminal from session: {0}".format(request.session['terminal']))
-
-
     if query is not None:
         results = Badge.objects.filter(
             Q(attendee__lastName__icontains=query) | Q(attendee__firstName__icontains=query),
-            Q(event__name__icontains='2018')
+            Q(event=event)
         )
         if len(results) == 0:
             errors.append({'type' : 'warning', 'text' : 'No results for query "{0}"'.format(query)})
@@ -877,13 +1120,15 @@ def onsiteAdmin(request):
     context = {
         'terminals' : terminals,
         'errors' : errors,
-        'results' : results
+        'results' : results,
+        'printer_uri' : settings.REGISTER_PRINTER_URI,
     }
 
     return render(request, 'registration/onsite-admin.html', context)
 
 @staff_member_required
 def onsiteAdminSearch(request):
+    event = Event.objects.get(default=True)
     terminals = list(Firebase.objects.all())
     query = request.POST.get('search', None)
     if query is None:
@@ -892,7 +1137,7 @@ def onsiteAdminSearch(request):
     errors = []
     results = Badge.objects.filter(
         Q(attendee__lastName__icontains=query) | Q(attendee__firstName__icontains=query),
-        Q(event__name__icontains='2018')
+        Q(event=event)
     )
     if len(results) == 0:
         errors = [{'type' : 'warning', 'text' : 'No results for query "{0}"'.format(query)}]
@@ -930,11 +1175,13 @@ def onsiteAdminCart(request):
     order = None
     subtotal = 0
     result = []
+    first_order = None
     for badge in badges:
         oi = badge.getOrderItems()
         level = None
         for item in oi:
             level = item.priceLevel
+            # WHY?
             if item.order is not None:
                 order = item.order
         if level is None:
@@ -945,6 +1192,15 @@ def onsiteAdminCart(request):
                 'price' : level.basePrice
             }
             subtotal += level.basePrice
+
+        order = badge.getOrder()
+        if first_order is None:
+            first_order = order
+        else:
+            # Reassign order references of items in cart to match first:
+            order = badge.getOrder()
+            order.reference = first_order.reference
+            order.save()
 
         item = {
             'id' : badge.id,
@@ -1124,11 +1380,11 @@ def assignBadgeNumber(request):
     badge_number = request.GET.get('number')
     badge_name = request.GET.get('badge', None)
     badge = None
+    event = Event.objects.get(default=True)
 
     if badge_name is not None:
         try:
-            badge = Badge.objects.filter(badgeName__icontains=badge_name, event__name="Furthemore 2018").first()
-
+            badge = Badge.objects.filter(badgeName__icontains=badge_name, event__name=event.name).first()
         except:
             return JsonResponse({'success' : False, 'reason' : 'Badge name search returned no results'})
     else:
@@ -1150,24 +1406,41 @@ def assignBadgeNumber(request):
             return JsonResponse({'success': False, 'message': 'Badge ID must be an integer'}, status=400)
 
     try:
-        badge.badgeNumber = badge_number
+        if badge_number < 0:
+            # Auto assign
+            badges = Badge.objects.filter(event=badge.event)
+            highest = badges.aggregate(Max('badgeNumber'))['badgeNumber__max']
+            highest = highest + 1
+            badge.badgeNumber = highest
+        else:
+            badge.badgeNumber = badge_number
         badge.save()
     except Exception as e:
-        return JsonResponse({'success' : False, 'message' : 'Error while saving badge number'}, status=500)
+        return JsonResponse({'success' : False, 'message' : 'Error while saving badge number', 'error' : str(e)}, status=500)
 
     return JsonResponse({'success' : True})
+
+def get_attendee_age(attendee):
+    born = attendee.birthdate
+    today = date.today()
+    age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    return age
+
 
 @staff_member_required
 def onsitePrintBadges(request):
     badge_list = request.GET.getlist('id')
     con = printing.Main(local=True)
     tags = []
+    theme = ""
 
     for badge_id in badge_list:
         try:
             badge = Badge.objects.get(id=badge_id)
         except Badge.DoesNotExist:
             return JsonResponse({'success' : False, 'message' : 'Badge id {0} does not exist'.format(badge_id)}, status=404)
+
+        theme = badge.event.badgeTheme
 
         if badge.badgeNumber is None:
             badgeNumber = ''
@@ -1178,12 +1451,15 @@ def onsitePrintBadges(request):
             'name' : badge.badgeName,
             'number' : badgeNumber,
             'level' : str(badge.effectiveLevel()),
-            'title' : ''
+            'title' : '',
+            'age'    : get_attendee_age(badge.attendee)
         })
         badge.printed = True
         badge.save()
 
-    con.nametags(tags, theme='apis')
+    if theme == "":
+        theme == "apis"
+    con.nametags(tags, theme=theme)
     pdf_path = con.pdf.split('/')[-1]
 
     file_url = reverse(printNametag) + '?file={0}'.format(pdf_path)
@@ -1201,6 +1477,12 @@ def onsiteSignature(request):
     context = {}
     return render(request, 'registration/signature.html', context)
 
+@staff_member_required
+@user_passes_test(in_group('Manager'))
+def manualDiscount(request):
+    # FIXME stub
+    raise NotImplementedError
+
 
 ###################################
 # Attendees
@@ -1212,35 +1494,42 @@ def checkBanList(firstName, lastName, email):
     return False
 
 def upgrade(request, guid):
-    context = {'token': guid}
+    event = Event.objects.get(default=True)
+    context = {'token': guid, 'event': event}
     return render(request, 'registration/attendee-locate.html', context)
 
 def infoUpgrade(request):
-  try:
-    postData = json.loads(request.body)
-    email = postData['email']
-    token = postData['token']
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for infoUpgrade()")
+        return JsonResponse({'success': False})
 
-    evt = postData['event']
-    event = Event.objects.get(name=evt)
+    try:
+        email = postData['email']
+        token = postData['token']
 
-    badge = Badge.objects.get(registrationToken=token)
-    if not badge:
-      return HttpResponseServerError("No Record Found")
+        evt = postData['event']
+        event = Event.objects.get(name=evt)
 
-    attendee = badge.attendee
-    if attendee.email.lower() != email.lower():
-      return HttpResponseServerError("No Record Found")
+        badge = Badge.objects.get(registrationToken=token)
+        if not badge:
+          return HttpResponseServerError("No Record Found")
 
-    request.session['attendee_id'] = attendee.id
-    request.session['badge_id'] = badge.id
-    return JsonResponse({'success': True, 'message':'ATTENDEE'})
-  except Exception as e:
-    logger.exception("Error in starting upgrade.")
-    return HttpResponseServerError(str(e))
+        attendee = badge.attendee
+        if attendee.email.lower() != email.lower():
+          return HttpResponseServerError("No Record Found")
+
+        request.session['attendee_id'] = attendee.id
+        request.session['badge_id'] = badge.id
+        return JsonResponse({'success': True, 'message':'ATTENDEE'})
+    except Exception as e:
+        logger.exception("Error in starting upgrade.")
+        return HttpResponseServerError(str(e))
 
 def findUpgrade(request):
-    context = {'attendee': None}
+    event = Event.objects.get(default=True)
+    context = {'attendee': None, 'event': event}
     try:
       attId = request.session['attendee_id']
       badgeId = request.session['badge_id']
@@ -1255,14 +1544,21 @@ def findUpgrade(request):
         lvl = badge.effectiveLevel()
         existingOIs = badge.getOrderItems()
         lvl_dict = {'basePrice': lvl.basePrice, 'options': getOptionsDict(existingOIs)}
-        context = {'attendee': attendee, 'badge': badge,
+        context = {'attendee': attendee, 
+                   'badge': badge,
+                   'event': event,
                    'jsonAttendee': json.dumps(attendee_dict, default=handler),
                    'jsonBadge': json.dumps(badge_dict, default=handler),
                    'jsonLevel': json.dumps(lvl_dict, default=handler)}
     return render(request, 'registration/attendee-upgrade.html', context)
 
 def addUpgrade(request):
-    postData = json.loads(request.body)
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for addUpgrade()")
+        return JsonResponse({'success': False})
+
     pda = postData['attendee']
     pdp = postData['priceLevel']
     pdd = postData['badge']
@@ -1311,12 +1607,19 @@ def invoiceUpgrade(request):
             lvl = badge.effectiveLevel()
             lvl_dict = {'basePrice': lvl.basePrice}
             orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
-            total = getTotal(orderItems)
-            context = {'orderItems': orderItems, 'total': total, 'attendee': attendee, 'prevLevel': lvl_dict}
+            total = getTotal([], orderItems)
+            context = {
+                'orderItems': orderItems, 
+                'total': total,
+                'attendee': attendee,
+                'prevLevel': lvl_dict,
+                'event': badge.event,
+            }
     return render(request, 'registration/upgrade-checkout.html', context)
 
 def doneUpgrade(request):
-    context = {}
+    event = Event.objects.get(default=True)
+    context = { 'event' : event }
     return render(request, 'registration/upgrade-done.html', context)
 
 def checkoutUpgrade(request):
@@ -1327,26 +1630,33 @@ def checkoutUpgrade(request):
         return HttpResponseServerError("Session expired")
 
     attendee = Attendee.objects.get(id=request.session.get('attendee_id'))
-    postData = json.loads(request.body)
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for checkoutUpgrade()")
+        return JsonResponse({'success': False})
+
     event = Event.objects.get(default=True)
 
-    subtotal = getTotal(orderItems)
+    subtotal = getTotal([], orderItems)
 
     if subtotal == 0:
-        status, message, order = doZeroCheckout(attendee, discount, orderItems)
+        status, message, order = doZeroCheckout(None, None, orderItems)
+
         if not status:
             return JsonResponse({'success': False, 'message': message})
 
         request.session.flush()
         try:
-            sendUpgradePaymentEmail(attendee, order)
+            emails.sendUpgradePaymentEmail(attendee, order)
         except Exception as e:
             logger.exception("Error sending UpgradePaymentEmail - zero sum.")
-            return JsonResponse({'success': False, 'message': "Your upgrade payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact registration@furthemore.org to get your confirmation number."})
+            registrationEmail = getRegistrationEmail(event)
+            return JsonResponse({'success': False, 'message': "Your upgrade payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact {0} to get your confirmation number.".format(registrationEmail)})
         return JsonResponse({'success': True})
 
-    porg = Decimal(postData["orgDonation"].strip() or 0.00)
-    pcharity = Decimal(postData["charityDonation"].strip() or 0.00)
+    porg = Decimal(postData["orgDonation"].strip() or '0.00')
+    pcharity = Decimal(postData["charityDonation"].strip() or '0.00')
     if porg < 0:
         porg = 0
     if pcharity < 0:
@@ -1356,15 +1666,16 @@ def checkoutUpgrade(request):
 
     pbill = postData['billingData']
     ip = get_client_ip(request)
-    status, message, order = doCheckout(pbill, total, None, orderItems, porg, pcharity, ip)
+    status, message, order = doCheckout(pbill, total, None, [], orderItems, porg, pcharity, ip)
 
     if status:
         request.session.flush()
         try:
-            sendUpgradePaymentEmail(attendee, order)
+            emails.sendUpgradePaymentEmail(attendee, order)
         except Exception as e:
             logger.exception("Error sending UpgradePaymentEmail.")
-            return JsonResponse({'success': False, 'message': "Your upgrade payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact registration@furthemore.org to get your confirmation number."})
+            registrationEmail = getRegistrationEmail(event)
+            return JsonResponse({'success': False, 'message': "Your upgrade payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact {0} to get your confirmation number.".format(registrationEmail)})
         return JsonResponse({'success': True})
     else:
         order.delete()
@@ -1377,17 +1688,19 @@ def checkoutUpgrade(request):
 
 
 def getCart(request):
-    sessionItems = request.session.get('order_items', [])
+    sessionItems = request.session.get('cart_items', [])
+    sessionOrderItems = request.session.get('order_items', [])
     discount = request.session.get('discount', "")
-    if not sessionItems:
+    event = None
+    if not sessionItems and not sessionOrderItems:
         context = {'orderItems': [], 'total': 0, 'discount': {}}
         request.session.flush()
-    else:
-        orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
+    elif sessionOrderItems:
+        orderItems = list(OrderItem.objects.filter(id__in=sessionOrderItems))
         if discount:
-	    discount = Discount.objects.filter(codeName=discount)
+            discount = Discount.objects.filter(codeName=discount)
             if discount.count() > 0: discount = discount.first()
-        total = getTotal(orderItems, discount)
+        total, total_discount = getTotal([], orderItems, discount)
 
         hasMinors = False
         for item in orderItems:
@@ -1395,32 +1708,97 @@ def getCart(request):
               hasMinors = True
               break
 
-        context = {'orderItems': orderItems, 'total': total, 'discount': discount, 'hasMinors': hasMinors}
+        event = Event.objects.get(default=True)
+        context = {
+            'event' : event,
+            'orderItems': orderItems,
+            'total': total,
+            'total_discount' : total_discount,
+            'discount': discount,
+            'hasMinors': hasMinors
+        }
+
+    elif sessionItems:
+        cartItems = list(Cart.objects.filter(id__in=sessionItems))
+        orderItems = []
+        if discount:
+	    discount = Discount.objects.filter(codeName=discount)
+            if discount.count() > 0: discount = discount.first()
+        total, total_discount = getTotal(cartItems, [], discount)
+
+        hasMinors = False
+        for cart in cartItems:
+            cartJson = json.loads(cart.formData)
+            pda = cartJson['attendee']
+            event = Event.objects.get(name=cartJson['event'])
+            evt = event.eventStart
+            tz = timezone.get_current_timezone()
+            birthdate = tz.localize(datetime.strptime(pda['birthdate'], '%Y-%m-%d' ))
+            age_at_event = evt.year - birthdate.year - ((evt.month, evt.day) < (birthdate.month, birthdate.day))
+            if age_at_event < 18:
+              hasMinors = True
+
+            pdp = cartJson['priceLevel']
+            priceLevel = PriceLevel.objects.get(id=pdp['id'])
+            pdo = pdp['options']
+            options = []
+            for option in pdo:
+                dataOption = {}
+                optionData = PriceLevelOption.objects.get(id=option['id'])
+                if optionData.optionExtraType == 'int':
+                    if option['value']:
+                        itemTotal = (optionData.optionPrice*Decimal(option['value']))
+                        dataOption = {'name': optionData.optionName, 'number': option['value'], 'total': itemTotal}
+                else:
+                    itemTotal = optionData.optionPrice
+                    dataOption = {'name': optionData.optionName, 'total': itemTotal}
+                options.append(dataOption)
+            orderItem = {
+                'id' : cart.id,
+                'attendee': pda,
+                'priceLevel': priceLevel,
+                'options': options
+            }
+            orderItems.append(orderItem)
+
+        if event is None:
+            event = Event.objects.get(default=True)
+        context = {
+            'event' : event,
+            'orderItems': orderItems,
+            'total': total,
+            'total_discount' : total_discount,
+            'discount': discount,
+            'hasMinors': hasMinors
+        }
     return render(request, 'registration/checkout.html', context)
 
-
-def addToCart(request):
-    postData = json.loads(request.body)
-    #create attendee from request post
+def saveCart(cart):
+    postData = json.loads(cart.formData)
     pda = postData['attendee']
     pdp = postData['priceLevel']
     evt = postData['event']
-
-    banCheck = checkBanList(pda['firstName'], pda['lastName'], pda['email'])
-    if banCheck:
-        logger.exception("***ban list registration attempt***")
-        return JsonResponse({'success': False, 'message': "We are sorry, but you are unable to register for " + evt + ". If you have any questions, or would like further information or assistance, please contact Registration at registration@furthemore.org."})
 
     tz = timezone.get_current_timezone()
     birthdate = tz.localize(datetime.strptime(pda['birthdate'], '%Y-%m-%d' ))
 
     event = Event.objects.get(name=evt)
 
-    attendee = Attendee(firstName=pda['firstName'], lastName=pda['lastName'], address1=pda['address1'], address2=pda['address2'],
-                        city=pda['city'], state=pda['state'], country=pda['country'], postalCode=pda['postal'],
+    attendee = Attendee(firstName=pda['firstName'], lastName=pda['lastName'], 
                         phone=pda['phone'], email=pda['email'], birthdate=birthdate,
                         emailsOk=bool(pda['emailsOk']), volunteerContact=len(pda['volDepts']) > 0, volunteerDepts=pda['volDepts'],
                         surveyOk=bool(pda['surveyOk']), aslRequest=bool(pda['asl']))
+    
+    if event.collectAddress:
+        try:
+            attendee.address1=pda['address1']
+            attendee.address2=pda['address2']
+            attendee.city=pda['city']
+            attendee.state=pda['state']
+            attendee.country=pda['country']
+            attendee.postalCode=pda['postal']
+        except KeyError:
+            logging.error("Supposed to be collecting addresses, but wasn't provided by form!")
     attendee.save()
 
     badge = Badge(badgeName=pda['badgeName'], event=event, attendee=attendee)
@@ -1440,67 +1818,149 @@ def addToCart(request):
         if plOption.optionExtraType == 'int' and option['value'] == '':
             attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue='0')
         else:
-            attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
+            if option['value'] != '':
+                attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
         attendeeOption.save()
 
-    #add attendee to session order
-    orderItems = request.session.get('order_items', [])
-    orderItems.append(orderItem.id)
-    request.session['order_items'] = orderItems
-    return JsonResponse({'success': True})
+    cart.transferedDate = datetime.now()
+    cart.save()
 
+    return orderItem
+
+def addToCart(request):
+    """
+    Create attendee from request post.
+    """
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        return abort(400, "Unable to decode JSON body")
+
+    event = Event.objects.get(default=True)
+
+    try:
+        pda = postData['attendee']
+        pda['firstName']
+        pda['lastName']
+        pda['email']
+    except KeyError:
+        return abort(400, "Required parameters not found in POST body")
+
+    banCheck = checkBanList(pda['firstName'], pda['lastName'], pda['email'])
+    if banCheck:
+        logger.error("***ban list registration attempt***")
+        registrationEmail = getRegistrationEmail()
+        return abort(403, "We are sorry, but you are unable to register for {0}. If you have any questions, or would like further information or assistance, please contact Registration at {1}".format(event, registrationEmail))
+
+    cart = Cart(form=Cart.ATTENDEE, formData=request.body, formHeaders=getRequestMeta(request))
+    cart.save()
+
+    #add attendee to session order
+    cartItems = request.session.get('cart_items', [])
+    cartItems.append(cart.id)
+    request.session['cart_items'] = cartItems
+    return success()
 
 def removeFromCart(request):
-    postData = json.loads(request.body)
-    id = postData['id']
     #locate attendee in session order
+    deleted = False
     order = request.session.get('order_items', [])
-    #remove attendee from session order
-    for item in order:
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        return abort(400, 'Unable to decode JSON parameters')
+    if 'id' not in postData.keys():
+        return abort(400, 'Required parameter `id` not specified')
+    id = postData['id']
+
+    # Old workflow
+    logger.debug("order_items: {0}".format(order))
+    logger.debug("delete order from session: {0}".format(id))
+    if int(id) in order:
+        order.remove(int(id))
+        deleted = True
+        request.session['order_items'] = order
+        return success()
+
+    # New cart workflow
+    cartItems = request.session.get('cart_items', [])
+    logger.debug("cartItems: {0}".format(cartItems))
+    for item in cartItems:
         if str(item) == str(id):
-            deleteOrderItem(item)
-            order.remove(item)
-    request.session['order_items'] = order
-    return JsonResponse({'success': True})
+            cart = Cart.objects.get(id=id)
+            cart.delete()
+            deleted = True
+    if not deleted:
+        return abort(404, 'Cart ID not in session')
+    return success()
 
 def cancelOrder(request):
-    #remove order from session
+    # (DEPRECATED) remove order from session
     order = request.session.get('order_items', [])
     for item in order:
         deleteOrderItem(item)
-    request.session.flush()
-    return JsonResponse({'success': True})
+    # Delete carts
+    sessionItems = request.session.get('cart_items', [])
+    cartItems = Cart.objects.filter(id__in=sessionItems)
+    cartItems.delete()
+    # Clear session values
+    clear_session(request)
+    return success() 
+
+def clear_session(request):
+    """
+    Soft-clears session by removing any non-protected session values.
+    (anything prefixed with '_'; keeps Django user logged-in)
+    """
+    for key in request.session.keys():
+        if key[0] != '_':
+            del request.session[key]
 
 def checkout(request):
-    sessionItems = request.session.get('order_items', [])
+    event = Event.objects.get(default=True)
+    sessionItems = request.session.get('cart_items', [])
+    cartItems = list(Cart.objects.filter(id__in=sessionItems))
+    orderItems = request.session.get('order_items', [])
     pdisc = request.session.get('discount', "")
-    orderItems = list(OrderItem.objects.filter(id__in=sessionItems))
-    postData = json.loads(request.body)
+
+    # Safety valve (in case session times out before checkout is complete)
+    if len(sessionItems) == 0 and len(orderItems) == 0:
+        abort(400, "Session expired or no session is stored for this client")
+
+    try:
+        postData = json.loads(request.body)
+    except ValueError as e:
+        logger.error("Unable to decode JSON for checkout()")
+        return abort(400, 'Unable to parse input options')
 
     discount = Discount.objects.filter(codeName=pdisc)
     if discount.count() > 0 and discount.first().isValid():
-        subtotal = getTotal(orderItems, discount.first())
         discount = discount.first()
     else:
         discount = None
-        subtotal = getTotal(orderItems)
+
+    if orderItems:
+        orderItems = list(OrderItem.objects.filter(id__in=orderItems))
+
+    subtotal, _ = getTotal(cartItems, orderItems, discount)
 
     if subtotal == 0:
-        att = orderItems[0].badge.attendee
-        status, message, order = doZeroCheckout(att, discount, orderItems)
+        status, message, order = doZeroCheckout(discount, cartItems, orderItems)
         if not status:
-            return JsonResponse({'success': False, 'message': message})
+            return abort(400, message)
 
         request.session.flush()
         try:
-            sendRegistrationEmail(order, att.email)
+            emails.sendRegistrationEmail(order, order.billingEmail)
         except Exception as e:
-            logger.exception("Error sending RegistrationEmail - zero sum.")
-            return JsonResponse({'success': False, 'message': "Your payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact registration@furthemore.org to get your confirmation number."})
-        return JsonResponse({'success': True})
+            logger.error("Error sending RegistrationEmail - zero sum.")
+            logger.exception(e)
+            registrationEmail = getRegistrationEmail(event)
+            return abort(400, "Your payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact {0} to get your confirmation number.".format(registrationEmail))
+        return success()
 
-    porg = Decimal(postData["orgDonation"].strip() or 0.00)
-    pcharity = Decimal(postData["charityDonation"].strip() or 0.00)
+    porg = Decimal(postData["orgDonation"].strip() or '0.00')
+    pcharity = Decimal(postData["charityDonation"].strip() or '0.00')
     pbill = postData["billingData"]
 
     if porg < 0:
@@ -1548,19 +2008,25 @@ def checkout(request):
         status = True
         message = "Onsite success"
     else:
-        status, message, order = doCheckout(pbill, total, discount, orderItems, porg, pcharity, ip)
+        status, message, order = doCheckout(pbill, total, discount, cartItems, orderItems, porg, pcharity, ip)
 
     if status:
-        request.session.flush()
+        # Delete cart when done
+        cartItems = Cart.objects.filter(id__in=sessionItems)
+        cartItems.delete()
+        clear_session(request)
         try:
-            sendRegistrationEmail(order, order.billingEmail)
+            emails.sendRegistrationEmail(order, order.billingEmail)
         except Exception as e:
-            logger.exception("Error sending RegistrationEmail.")
-            return JsonResponse({'success': False, 'message': "Your payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact registration@furthemore.org to get your confirmation number."})
-        return JsonResponse({'success': True})
+            event = Event.objects.get(default=True)
+            registrationEmail = getRegistrationEmail(event)
+            
+            logger.error("Error sending RegistrationEmail.")
+            logger.exception(e)
+            return abort(500, "Your payment succeeded but we may have been unable to send you a confirmation email. If you do not receive one within the next hour, please contact {0} to get your confirmation number.".format(registrationEmail))
+        return success()
     else:
-        order.delete()
-        return JsonResponse({'success': False, 'message': message})
+        return abort(400, message)
 
 
 def cartDone(request):
@@ -1575,16 +2041,17 @@ def cartDone(request):
 def basicBadges(request):
     badges = Badge.objects.all()
     staff = Staff.objects.all()
+    event = Event.objects.get(default=True)
 
-    bdata = [{'badgeName': badge.badgeName, 'level': badge.effectiveLevel().name, 'assoc':badge.abandoned(),
+    bdata = [{'badgeName': badge.badgeName, 'level': badge.effectiveLevel().name, 'assoc':badge.abandoned,
               'firstName': badge.attendee.firstName.lower(), 'lastName': badge.attendee.lastName.lower(),
               'printed': badge.printed, 'discount': badge.getDiscount(),
-              'assoc': badge.abandoned(), 'orderItems': getOptionsDict(badge.orderitem_set.all()) }
-             for badge in badges if badge.effectiveLevel() != None and badge.event.name == "Furthemore 2018"]
+              'orderItems': getOptionsDict(badge.orderitem_set.all()) }
+             for badge in badges if badge.effectiveLevel() != None and badge.event == event]
 
     staffdata = [{'firstName': s.attendee.firstName.lower(), 'lastName':s.attendee.lastName.lower(),
                   'title': s.title, 'id': s.id}
-                for s in staff if s.event.name == "Furthemore 2018"]
+                for s in staff if s.event == event]
 
     for staff in staffdata:
         sbadge = Staff.objects.get(id=staff['id']).getBadge()
@@ -1594,7 +2061,7 @@ def basicBadges(request):
                 staff['level'] = sbadge.effectiveLevel().name
             else:
                 staff['level'] = "none"
-            staff['assoc'] = sbadge.abandoned()
+            staff['assoc'] = sbadge.abandoned
             staff['orderItems'] = getOptionsDict(sbadge.orderitem_set.all())
 
     sdata = sorted(bdata, key=lambda x:(x['level'],x['lastName']))
@@ -1608,14 +2075,18 @@ def basicBadges(request):
 @staff_member_required
 def vipBadges(request):
     badges = Badge.objects.all()
-    vipLevels = ('God-mode','God-Mode','Player','Raven God','Elite Sponsor','Super Sponsor')
+    # Assumes VIP levels based on being marked as "vip" group, or EmailVIP set
+    priceLevels = PriceLevel.objects.filter(Q(emailVIP=True) | Q(group__iexact='vip'))
+    vipLevels = [ level.name for level in priceLevels ]
 
+    # FIXME list comprehension is sloooooooow - there must be a way to do this in SQL -R
     bdata = [{'badge': badge, 'orderItems': getOptionsDict(badge.orderitem_set.all()),
               'level': badge.effectiveLevel().name, 'assoc': badge.abandoned}
              for badge in badges if badge.effectiveLevel() != None and badge.effectiveLevel() != 'Unpaid' and
                badge.effectiveLevel().name in vipLevels and badge.abandoned != 'Staff']
 
     events = Event.objects.all()
+    # FIXME this doesn't actually affect the order in the resulting template render
     events.reverse()
 
     return render(request, 'registration/utility/holidaylist.html', {'badges': bdata, 'events': events})
@@ -1659,17 +2130,26 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
+def getRequestMeta(request):
+    values = {}
+    values['HTTP_REFERER'] = request.META.get('HTTP_REFERER')
+    values['HTTP_USER_AGENT'] = request.META.get('HTTP_USER_AGENT')
+    values['IP'] = get_client_ip(request)
+    return json.dumps(values)
+
 def getOptionsDict(orderItems):
     orderDict = []
     for oi in orderItems:
         aos = oi.getOptions()
         for ao in aos:
             if ao.optionValue == 0 or ao.optionValue == None or ao.optionValue == "" or ao.optionValue == False: pass
+            try:
+                orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue, 'id': ao.option.id, 'image': ao.option.optionImage.url})
+            except:
+                orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue, 'id': ao.option.id, 'image': None})
 
             orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue,
-                              'id': ao.option.id, 'type': ao.option.optionExtraType,
-                              'description': ao.option.description})
-
+                              'id': ao.option.id, 'type': ao.option.optionExtraType})
     return orderDict
 
 def getEvents(request):
@@ -1687,6 +2167,32 @@ def getAllDepartments(request):
     data = [{'name': item.name, 'id': item.id} for item in depts]
     return HttpResponse(json.dumps(data), content_type='application/json')
 
+def getDivisions(request):
+    divs = Division.objects.order_by('id')
+    for div in divs:
+       data = [{'name': div.name, 'id':div.id} for div in divs]
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
+def getDivisionMapping(request):
+    depts = Department.objects.order_by('name')
+    divs = Division.objects.order_by('id')
+    data = {}
+    for div in divs:
+        data[str(div)] = {}
+        for dept in depts:
+            if dept.divisionID == div.id:
+                print(str(div.name))
+                data[str(div)][dept.id]= str(dept)
+    print(data)
+	
+  #  data = [{'name': item.name, 'id': item.id} for item in divs]
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
+def getTitles(request):
+    titles = Title.objects.order_by('name')
+    data = [{'name': item.name, 'groupNo': item.groupNo, 'id': item.id} for item in titles]
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
 def getPriceLevelList(levels):
     data = [ {
         'name': level.name,
@@ -1700,6 +2206,7 @@ def getPriceLevelList(levels):
             'required': option.required,
             'active': option.active,
             'type': option.optionExtraType,
+            'image': option.getOptionImage(),
             'description': option.description,
             'list': option.getList()
             } for option in level.priceLevelOptions.order_by('rank', 'optionPrice').all() ]
@@ -1777,7 +2284,7 @@ def getAdultPriceLevels(request):
     if att and badge and badge.effectiveLevel():
         levels = levels.exclude(basePrice__lt=badge.effectiveLevel().basePrice)
     data = getPriceLevelList(levels)
-    return HttpResponse(json.dumps(data, cls=DjangoJSONEncoder), content_type='application/json')    
+    return HttpResponse(json.dumps(data, cls=DjangoJSONEncoder), content_type='application/json')
 
 def getShirtSizes(request):
     sizes = ShirtSizes.objects.all()
@@ -1791,17 +2298,43 @@ def getTableSizes(request):
     return HttpResponse(json.dumps(data), content_type='application/json')
 
 def getSessionAddresses(request):
-    sessionItems = request.session.get('order_items', [])
+    event = Event.objects.get(default=True)
+    sessionItems = request.session.get('cart_items', [])
     if not sessionItems:
-        data = {}
-    else:
-        orderItems = OrderItem.objects.filter(id__in=sessionItems)
-        data = [{'id': oi.badge.attendee.id, 'fname': oi.badge.attendee.firstName,
+        #might be from dealer workflow, which is order items in the session
+        sessionItems = request.session.get('order_items', [])
+        if not sessionItems:
+            data = {}
+        else:
+            orderItems = OrderItem.objects.filter(id__in=sessionItems)
+            data = [{'id': oi.badge.attendee.id, 'fname': oi.badge.attendee.firstName,
                  'lname': oi.badge.attendee.lastName, 'email': oi.badge.attendee.email,
                  'address1': oi.badge.attendee.address1, 'address2': oi.badge.attendee.address2,
                  'city': oi.badge.attendee.city, 'state': oi.badge.attendee.state, 'country': oi.badge.attendee.country,
                  'postalCode': oi.badge.attendee.postalCode} for oi in orderItems]
-        context = {'addresses': data}
+    else:
+        data = []
+        cartItems = list(Cart.objects.filter(id__in=sessionItems))
+        for cart in cartItems:
+            cartJson = json.loads(cart.formData)
+            pda = cartJson['attendee']
+            cartItem = {
+                'fname': pda['firstName'],
+                'lname': pda['lastName'],
+                'email': pda['email'],
+                'phone': pda['phone'],
+            }
+            if event.collectAddress:
+                cartItem.update({
+                    'address1': pda['address1'],
+                    'address2': pda['address2'],
+                    'city': pda['city'], 
+                    'state': pda['state'],
+                    'postalCode': pda['postal'],
+                    'country': pda['country']
+                })
+
+            data.append(cartItem)
     return HttpResponse(json.dumps(data), content_type='application/json')
 
 @csrf_exempt
@@ -1824,18 +2357,48 @@ def completeSquareTransaction(request):
     #   serverTransactionId (online payments)
 
     try:
+        #order = Order.objects.get(reference=reference)
+        orders = Order.objects.filter(reference=reference)
+    except Order.DoesNotExist:
+        return JsonResponse({'success' : False, 'reason' : 'No order matching the reference specified exists'}, status=404)
+
+    for order in orders:
+        order.billingType = Order.CREDIT
+        order.status = "Complete"
+        order.settledDate = datetime.now()
+        order.notes = json.dumps({
+            'type' : 'square',
+            'clientTransactionId' : clientTransactionId,
+            'serverTransactionId' : serverTransactionId
+        })
+        order.save()
+
+    return JsonResponse({'success' : True})
+
+def completeCashTransaction(request):
+    reference = request.GET.get('reference', None)
+    total = request.GET.get('total', None)
+    tendered = request.GET.get('tendered', None)
+
+    if reference is None or tendered is None or total is None:
+        return JsonResponse({'success' : False, 'reason' : 'Reference, tendered, and total are required parameters'}, status=400)
+
+    try:
         order = Order.objects.get(reference=reference)
     except Order.DoesNotExist:
         return JsonResponse({'success' : False, 'reason' : 'No order matching the reference specified exists'}, status=404)
 
-    order.billingType = Order.CREDIT
+    order.billingType = Order.CASH
     order.status = "Complete"
     order.settledDate = datetime.now()
     order.notes = json.dumps({
-        'clientTransactionId' : clientTransactionId,
-        'serverTransactionId' : serverTransactionId
+        'type'     : 'cash',
+        'tendered' : tendered
     })
     order.save()
+
+    txn = Cashdrawer(action=Cashdrawer.TRANSACTION, total=total, tendered=tendered, user=request.user)
+    txn.save()
 
     return JsonResponse({'success' : True})
 
@@ -1861,17 +2424,6 @@ def firebaseRegister(request):
         pass
     except Exception as e:
         return JsonResponse({'success' : False, 'reason' : 'Failed while attempting to update existing name entry'}, status=500)
-
-    # Upsert if a new name with an existing token tries to register
-    try:
-        old_terminal = Firebase.objects.get(token=token)
-        old_terminal.name = name
-        old_terminal.save()
-        return JsonResponse({'success' : True, 'updated' : True})
-    except Firebase.DoesNotExist:
-        pass
-    except Exception as e:
-        return JsonResponse({'success' : False, 'reason' : 'Failed while attempting to update existing token entry'}, status=500)
 
     try:
         terminal = Firebase(token=token, name=name)
@@ -1902,6 +2454,37 @@ def firebaseLookup(request):
 ##################################
 # Not Endpoints
 
+def abort(status=400, reason="Bad request"):
+    """
+    Returns a JSON response indicating an error to the client.
+
+    status: A valid HTTP status code
+    reason: Human-readable explanation
+    """
+    logger.error("JSON {0}: {1}".format(status, reason))
+    return JsonResponse({
+        'success': False,
+        'reason' : reason
+    }, status=status)
+
+def success(status=200, reason=None):
+    """
+    Returns a JSON response indicating success.
+
+    status: A valid HTTP status code (2xx)
+    reason: (Optional) human-readable explanation
+    """
+    if reason is None:
+        logger.debug("JSON {0}".format(status))
+        return JsonResponse({'success': True}, status=status)
+    else:
+        logger.debug("JSON {0}: {1}".format(status, reason))
+        return JsonResponse({
+            'success': True,
+            'reason': reason,
+            'message': reason   #Backwards compatibility
+        }, status=status)
+
 def getConfirmationToken():
     return ''.join(random.SystemRandom().choice(string.ascii_uppercase+string.digits) for _ in range(6))
 
@@ -1922,3 +2505,52 @@ def handler(obj):
     else:
         raise TypeError, 'Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj))
 
+def getRegistrationEmail(event=None):
+    """
+    Retrieves the email address to show on error messages in the attendee
+    registration form for a specified event.  If no event specified, uses
+    the first default event.  If no email is listed there, returns the
+    default of APIS_DEFAULT_EMAIL in settings.py.
+    """
+    if event is None: 
+        try:
+            event = Event.objects.get(default=True)
+        except:
+            return settings.APIS_DEFAULT_EMAIL
+    if event.registrationEmail == '':
+        return settings.APIS_DEFAULT_EMAIL
+    return event.registrationEmail
+
+def getStaffEmail(event=None):
+    """
+    Retrieves the email address to show on error messages in the staff
+    registration form for a specified event.  If no event specified, uses
+    the first default event.  If no email is listed there, returns the
+    default of APIS_DEFAULT_EMAIL in settings.py.
+    """
+    if event is None: 
+        try:
+            event = Event.objects.get(default=True)
+        except:
+            return settings.APIS_DEFAULT_EMAIL
+    if event.staffEmail == '':
+        return settings.APIS_DEFAULT_EMAIL
+    return event.staffEmail
+
+def getDealerEmail(event=None):
+    """
+    Retrieves the email address to show on error messages in the dealer
+    registration form for a specified event.  If no event specified, uses
+    the first default event.  If no email is listed there, returns the
+    default of APIS_DEFAULT_EMAIL in settings.py.
+    """
+    if event is None: 
+        try:
+            event = Event.objects.get(default=True)
+        except:
+            return settings.APIS_DEFAULT_EMAIL
+    if event.dealerEmail == '':
+        return settings.APIS_DEFAULT_EMAIL
+    return event.dealerEmail
+
+# vim: ts=4 sts=4 sw=4 expandtab smartindent
