@@ -3,7 +3,6 @@
 {% load registration_tags %}
 
 {% block content %}
-
 <div class="modal fade" id="ageModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
@@ -19,7 +18,7 @@
   </div>
 </div>
 
-    {% if not token and auth == True%}
+    {% if not token %}
 		<h1>New Staff Registration <br/>{{event}}</h1>
         <p>Your session has expired. Please use the link in your registration email again to start over.</p>
     {% else %}
@@ -27,15 +26,56 @@
 	<form class="form-horizontal" role="form" data-toggle="validator">
 	<div class="tab-content">
 	<div role="tabpanel" class="tab-pane fade in active" id="personal">
+		{%if token == "DEFAULT" %}
+		<!-- <div class = 'test bg-danger warning container-fluid'> -->
+			<!-- <div class = 'row warning-header'> -->
+				<!-- <div class = 'col-1'> -->
+					<!-- <button type = 'button' class = 'btn btn-sm warning-exit'>X</button> -->
+				<!-- </div>  -->
+			
+				<!-- <div class = 'col-11'> -->
+					<!-- <h5>A NOTE FROM IT FOR 2019!</h5> -->
+				<!-- </div>  -->
+			<!-- </div>  -->
+			
+			<!-- <div class = 'row'> -->
+				<!-- <div class = 'col-12 warning-body'> -->
+					<!-- We aren't collecting payments or handling event registration from this system this year. The message below is for future-proofing only.  <b><i>Disregard the hell out of it.</i></b>  -->
+				<!-- </div>  -->
+			<!-- </div>  -->
+		<!-- </div> -->
+		
+		
+		
+		<!-- <div class = 'bg-warning warning container-fluid'> -->
+			<!-- <div class = 'row warning-header'> -->
+				<!-- <div class = 'col-1'> -->
+					<!-- <button type = 'button' class = 'btn btn-sm warning-exit'>X</button> -->
+				<!-- </div>  -->
+			
+				<!-- <div class = 'col-11'> -->
+					<!-- <h5>NOTICE</h5> -->
+				<!-- </div>  -->
+			<!-- </div>  -->
+			
+			<!-- <div class = 'row'> -->
+				<!-- <div class = 'col-12 warning-body'> -->
+					<!-- You are currently using a generic token and will not be able to pay for <i>event</i> registration.  Please contact <a href='mailto:{{event.staffEmail}}'>{{event.registrationEmail}}</a>  to receive a registration email. -->
+				<!-- </div>  -->
+			<!-- </div>  -->
+		<!-- </div>  -->
+		
+		{%endif%}
 		<h1>{{event}}<small>&nbsp; Staff Registration</small></h1>
-
+		
 		<p>Please review and update the information below. If you have any questions about this form, please contact <a href='mailto:{{ event.staffEmail }}'>{{ event.staffEmail }}</a>. Required fields are marked with a red asterisk (<span style="color:red;">*</span>)</p>
+
         {% show_attendee_form event=event %}
 
         {% show_staff_form staff %}
+
 		
-		{%if auth == True and event.staffEventRegistration == True%}
-		
+		{%if token != "DEFAULT"%}
         <hr/>
         <h3>Badge Level</h3>
         <br/>
@@ -44,16 +84,17 @@
 		{%endif%}
         <hr/>
 
-            <div class="form-group">
+            <div class="form-group form-inline agree">
                 <div class="col-sm-12">
-                    <input type="checkbox" id="agreeToRules" name="agreeToRules" class="form-control form-control-checkbox" required />
+                    <input type="checkbox" id="agreeToRules" name="agreeToRules" class="form-controlform-control-checkbox" required />
 			        I agree to abide by {{event}}'s <a href="{{ event.codeOfConduct }}">Code of Conduct.</a>
                 </div>
 		        <div class="col-sm-offset-1 help-block with-errors" style="padding-left:15px;"></div>
 		    </div>
+					
 		    <div class="form-group">
                  <div class="col-sm-12">
-                    <button id="register" type="submit" class="btn btn-primary col-sm-6 col-sm-offset-6" aria-controls="profile" data-toggle="tab">Register</button>
+                    <button id="register" type="submit" class="btn btn-primary sol-sm-6 " aria-controls="profile" data-toggle="tab">Register</button>
 		        </div>
             </div>
 	    </div>
@@ -68,31 +109,22 @@
 
 {% block javascript %}
 <script>
-	//Pass things here to allow external scripts to use the data. 
-	var auth_token = '{{event.useAuthToken}}';
-		auth_token = Boolean(auth_token)
-	 
+    var discount = {{event.newStaffDiscount.amountOff}}
+    var adult = true;
 </script>
-
 <script type="text/javascript" src="/static/js/templates/price-types.js"></script>
 <script type="text/javascript" src="/static/js/templates/staff.js"></script>
-<script type="text/javascript">
+ <script type="text/javascript">
 
 	$("#register").click(doRegister);
-	//Handle no staff discount.  
-	{% if not event.newStaffDiscount.amountOff%}
-	console.warn("EM: No staff discount found!"); 
-	var adult = true;
-   	var discount = false;
+	$(".warning-exit").click(e=>{
+		$(e.currentTarget).parent().parent().parent().fadeOut(300); 
+	});
 	
-	{% else %}
-	alert("JS2"); 
-	var adult = true;
-    var discount = {{event.newStaffDiscount.amountOff}};
 	
-	{% endif %}
 
 	function doRegister(e) {
+		console.log($('#division').val()); 
 		e.preventDefault();
 		$("form").validator('validate');
 		var errorCount = $(".has-error").length;
@@ -196,6 +228,26 @@
 			console.log(data);
 	
 		
+		<!-- var data = { -->
+			<!-- 'attendee': { -->
+				<!-- 'firstName': $("#firstName").val(), 'lastName': $("#lastName").val(),  -->
+				<!-- 'address1': $("#add1").val(), 'address2': $("#add2").val(), 'city': $("#city").val(),  -->
+				<!-- 'state': $("#state").val(), 'country': $("#country").val(), 'postal': $("#zip").val(), -->
+				<!-- 'birthdate' : $("#birthDate").val(), 'phone': $("#phone").val(),  -->
+                <!-- 'email':$("#email").val(), 'badgeName': $("#badgeName").val() -->
+			<!-- },  -->
+			<!-- 'staff': { -->
+				<!-- 'shirtsize': $("#shirt").val(), 'specialSkills': $("#skills").val(), -->
+				<!-- 'specialFood': $("#food").val(), 'specialMedical': $("#medical").val(), -->
+				<!-- 'contactPhone': $("#contactPhone").val(), 'contactName': $("#contactName").val(), -->
+				<!-- 'contactRelation': $("#contactRel").val(), -->
+				<!-- 'department': $("#department").val(), -->
+				<!-- 'title': $("#title").val() -->
+			<!-- }, -->
+            <!-- //'priceLevel': { 'id': $(".selectLevel")[0].id.split('_')[1], 'options': getOptions() }, -->
+            <!-- 'event': '{{event}}' -->
+		<!-- }; -->
+	
 
 		$.ajax({
 		    "type": "POST",
@@ -203,7 +255,6 @@
 		    "url": "{% url 'addNewStaff' %}",
 		    "data": JSON.stringify(data),
 		    "beforeSend": function(xhr, settings) {
-		        console.log("Before Send");
 		        $.ajaxSettings.beforeSend(xhr, settings);
 		    },
 		    "error": function(result, status, error) {
