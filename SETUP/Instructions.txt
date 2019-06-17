@@ -1,0 +1,107 @@
+## Make a new user, add it to sudoers.  
+adduser <username>
+usermod -aG sudo <username>
+
+## (As root) Add the source info for postgres 9.4; add the signing key. 
+lsb_release -a ## Get the codename; insert it before main.  
+echo "deb http://apt.postgresql.org/pub/repos/apt/ bionic-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+apt-get update
+apt-get install apache2 postgresql-9.4 postgresql-server-dev-9.4 build-essential libxml2 libxml2-dev libxslt1-dev python python-dev python-virtualenv python-pip libapache2-mod-wsgi
+
+## (As local user)
+## Allow the www-data user to run pull.sh (last line)
+sudo visudo
+www-data ALL = NOPASSWD:/home/dhickman/pull.sh
+
+
+## clone the repo, get the local branch to track your target branch; check it out.  
+sudo git clone https://github.com/S3kwel/APIS/
+sudo git clone --mirror https://github.com/S3kwel/APIS/
+
+cd APIS
+
+sudo git branch -r #To see branches. 
+sudo git branch -t registration origin/registration
+sudo git checkout registration
+
+##Pull the needed docs from the repo. 
+## Make sure that all paths point to your installation of APIS and read through the file!
+## WSGI.py and settings may need tweaking depending on your needs.  You are advised to review them.  
+sudo cp /home/dhickman/APIS/SETUP/pull.sh /home/dhickman
+sudo cp /home/dhickman/APIS/SETUP/wsgi.py /home/dhickman/APIS/fm_eventmanager/wsgi.py
+sudo cp /home/dhickman/APIS/SETUP/settings.py /home/dhickman/APIS/fm_eventmanager/settings.py
+
+##Make pull.sh executable, owned by apache user group. 
+sudo chmod +x /home/dhickman/pull.sh
+sudo chown :www-data /home/dhickman/pull.sh
+
+##Spin up a virtual env. 
+sudo virtualenv -p python2 venv
+source venv/bin/activate
+
+## Install requirements.
+## Make sure you're using the version of pip inside the venv folder! Otherwise you will install system-wide! 
+## If you run into errors, python 2.7 (which this runs on) is apparently near its EOL.  
+sudo venv/bin/pip install django==1.11.17
+sudo venv/bin/pip install django-mathfilters==0.4.0
+sudo venv/bin/pip install django-nested-inline==0.3.7
+sudo venv/bin/pip install django-import-export==1.1.0
+sudo venv/bin/pip install psycopg2==2.7.1
+sudo venv/bin/pip install configobj
+sudo venv/bin/pip install django-extensions
+sudo venv/bin/pip install django-guardian==1.5.1
+sudo venv/bin/pip install django-flat-responsive
+sudo venv/bin/pip install django-widget-tweaks
+sudo venv/bin/pip install squareconnect==2.20181212.0
+sudo venv/bin/pip install pyOpenSSL
+sudo venv/bin/pip install django-u2f
+sudo venv/bin/pip install Pillow>=5.3
+sudo venv/bin/pip install Werkzeug
+sudo venv/bin/pip install django-debug-toolbar
+sudo venv/bin/pip install images
+ 
+
+## Collect static files.  
+## default is [base dir for files]/APIS/static as per the settings.py provided. 
+sudo python manage.py collectstatic
+
+## DB prep, credential creation.
+sudo ./manage.py makemigrations
+sudo ./manage.py migrate
+sudo ./manage.py createsuperuser
+
+## Test the server to make sure it works. 
+## This also creates the db file used later.  
+sudo python manage.py runserver 0.0.0.0:8000
+
+## Copy the apache conf file from the stup folder to /etc/apache2/sites-available/
+## Alter the permissions for the sqlite db, give the www-data group ownership.    
+sudo chmod 664 ~/APIS/db.sqlite3
+sudo chown www-data:www-data /home/dhickman/APIS/db.sqlite3
+sudo chown www-data:www-data /home/dhickman/APIS
+sudo chown -R www-data:www-data media/
+
+
+## add Apache Full
+sudo ufw allow 'Apache Full'
+sudo systemctl restart apache2
+
+## The instance is now properly deployed.  The next steps work towards setting up a GIT push to the environment.  
+
+## GIT WEBHOOK SETUP
+
+## Add urls.py and views.py to fm_eventmanager.
+sudo cp /home/dhickman/APIS/SETUP/views.py /home/dhickman/APIS/fm_eventmanager/views.py
+sudo cp /home/dhickman/APIS/SETUP/urls.py /home/dhickman/APIS/fm_eventmanager/urls.py
+
+
+## Prep a Github web hook in the settings tab for the repo you are cloning.
+## Point a web hook to http://[HOST ADDRESS]/api/pull/ and http://[HOST ADDRESS]:8000/api/pull/, using the key defined in settings.py on PUSH ONLY.
+
+
+
+
+ 
+
+
