@@ -2,43 +2,33 @@ var levelTemplateData = [];
 var levelData = [];
 var shirtSizes = [];
 var adult; 
-var converter = new showdown.Converter()
-//NOTE: Templates for attendee reg are located ???
 
 
-$( "body" ).ready(function() { 
-		var url = "/registration/pricelevels";
+$( "body" ).ready(function() {
+        var url = "/registration/pricelevels";
         if(adult != undefined){
             url = "/registration/adultpricelevels";
         }
-		
-		
-		
+
         $.getJSON(url, function(data) {
             levelData = data;
-			console.log(data); 
             $.each( data, function( key, val ) {
                 var price = val.base_price;
-			
-                if (typeof discount != 'undefined') { price = val.base_price - discount; }
+                if (discount) { price = val.base_price - discount; }
                 levelTemplateData.push({
                     name: val.name,
                     price: "$" + price,
                     levelId: "level_" + val.id,
-                    selectText: "Select " + val.name,
-					img: val.optionImage, 
+                    selectText: "Select " + val.name
                 });
             });
-            $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData, {afterInsert: d=>{setBg(d)}});
+            $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);
             $(".changeLevel").hide();
             
         });
 
         $.getJSON("/registration/shirts", function(data) {
             shirtSizes = data;
-			if(shirtSizes.length == 0){
-				console.warn("EM: No shirt sizes found!");
-			}
         });
 
 });
@@ -50,72 +40,93 @@ $( "body" ).ready(function() {
             var id = val.levelId.split('_')[1];
             if (id == levelId){
                 $("#regLevel").val(val.name);
-                $("#levelContainer").loadTemplate($("#levelTemplate"), val,{afterInsert: d=>{setBg(d)}});
+                $("#levelContainer").loadTemplate($("#levelTemplate"), val);
                 $(".changeLevel").show();
-                $(".selectLevel").hide();
+                $(".selectLevel").text("Selected!");
                 generateOptions(id);
                 return false;
             }
         });
     });
-	
     $("#levelContainer").on('click', 'a.changeLevel', function() {
-        $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData, {afterInsert: d=>{setBg(d)}});      
+        $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);      
         $("#regLevel").val("");
         $(".changeLevel").hide();
     });
-	
     var clearLevels = function(){
         $.each( levelTemplateData, function( key, val ) {
             $("#"+val.levelId).text("Select " + val.name);
         });
         $("form").validator('update');
     };
-	
-	var setBg = function(d){
-			let img = $(d).find('.priceImg').attr('src');
-			$(d).find('.priceImg').remove();
-			let w = $(d).find('.panel.price').outerWidth();
-			let h = $(d).find('.panel.price').outerHeight() * 0.86;
-			$(d).find('.panel.price').css('background-position',`center top`); 
-			$(d).find('.panel.price').css('background-size',`100%`); 
-			$(d).find('.panel.price').css('background-opacity',`0.5`); 
-			$(d).find('.panel.price').css('background-repeat',`no-repeat`); 
-			$(d).find('.panel.price').css('background-image',`url(${img})`); 
-			$($(d).find('.panel.price')).prepend(`<div class ='priceOptionCover' style='position: absolute; z-index: 0; pointer-events:none; background-color: black; opacity: 0.5; width: ${w}px; height: ${h}px; '></div>`);
-		}
-	
+
     var generateOptions = function(levelId){
         var data = [];
         var description = "";
         $.each(levelData, function(key, thing){
             if (thing.id == levelId){
                 data = thing.options;
-                description = converter.makeHtml(thing.description);
+                description = thing.description;
                 return false;
             }
         });
-		//NOTE: Why not template this out at some point?
-		var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Description</h4><hr/><div class='form-group'><div class='col-sm-12'>" + converter.makeHtml(description) + "<div class ='row addons' ><h5>Add-ons</h5><hr></div></div></div></div>");
-		$("#levelContainer").append(container);
-		if(data.length == 0){$(".row.addons").remove();
-		} 
+        var container = $("<div id='optionsContainer' class='col-xs-6 col-sm-6 col-md-6 col-lg-8'><h4>Level Options</h4><hr/><div class='form-group'><div class='col-sm-12'>" + description + "</div></div></div>");
+        $("#levelContainer").append(container);
         $.each( data, function(key, val) {
-			
-            if (val.value == "0.00"){var price = " (Free) ";}
-			else {
+            if (val.value == "0.00"){
+                var price = " (Free) ";
+            } else {
                 var price = " (+$" + val.value + ") "
             }
             var required = "";
             if (val.required) {required = "required";}
-            
-			var template = $("#optionBoolTemplate");
-			if (val.required) {template = $("#optionBoolReqTemplate");}
-			$("#optionsContainer").loadTemplate(template, {
-				'name': val.name + " " + price,
-				'id': "option_" + val.id
-			}, {append: true});
-		
+            switch (val.type){
+                case "plaintext":
+                    var template = $("#optionPlainTextTemplate");
+                    $("#optionsContainer").loadTemplate(template, {
+                        'content': val.description
+                    }, {append: true});
+                    break;  
+                case "bool":
+                    var template = $("#optionBoolTemplate");
+                    if (val.required) {template = $("#optionBoolReqTemplate");}
+                    $("#optionsContainer").loadTemplate(template, {
+                        'name': val.name + " " + price,
+                        'id': "option_" + val.id
+                    }, {append: true});
+                    break;
+                case "int":
+                    var template = $("#optionIntTemplate");
+                    if (val.required) {template = $("#optionIntReqTemplate");}
+                    $("#optionsContainer").loadTemplate(template, {
+                        'name': val.name + " " + price,
+                        'id': "option_" + val.id
+                    }, {append: true});
+                    break;
+                case "string":
+                    var template = $("#optionStringTemplate");
+                    if (val.required) {template = $("#optionStringReqTemplate");}
+                    var placeholder = val.name;
+                    $("#optionsContainer").loadTemplate(template, {
+                        'name': val.name + " " + price,
+                        'id': "option_" + val.id,
+                        'placeholder': placeholder,
+                    }, {append: true});
+                    break;
+                default:
+                    if (val.list == []){break;}
+                    var options = [];
+                    if (!val.required) {options.push({"content": "Select One...", "value": ""});}
+                    $.each(val.list, function (key, item) {
+                        options.push({"content": item.name, "value": item.id})
+                    });
+                    $("#optionsContainer").loadTemplate($("#optionListTemplate"), {
+                        'name': val.name + " " + price,
+                        'id': "option_" + val.id,
+                        'options': options
+                    }, {append: true});
+                    break;
+            }
         });
 
         $("form").validator('update');
