@@ -21,7 +21,7 @@
 
     {% if not token and auth == True%}
 		<h1>New Staff Registration <br/>{{event}}</h1>
-        <p>Your session has expired. {{auth}} Please use the link in your registration email again to start over.</p>
+        <p>Your session has expired. Please use the link in your registration email again to start over.</p>
     {% else %}
 
 	<form class="form-horizontal" role="form" data-toggle="validator">
@@ -83,7 +83,7 @@
 	{% if not event.newStaffDiscount.amountOff%}
 	console.warn("EM: No staff discount found!"); 
 	var adult = true;
-    var discount = false;
+   	var discount = false;
 	
 	{% else %}
 	alert("JS2"); 
@@ -117,25 +117,84 @@
         }
 
 		$("#register").attr("disabled", "disabled");
-
-		var data = {
-			'attendee': {
-				'firstName': $("#firstName").val(), 'lastName': $("#lastName").val(), 
+		let reportedDept = ''; 
+		
+		var data = {}
+			data['attendee'] = {'firstName': $("#firstName").val(), 'lastName': $("#lastName").val(), 
 				'address1': $("#add1").val(), 'address2': $("#add2").val(), 'city': $("#city").val(), 
 				'state': $("#state").val(), 'country': $("#country").val(), 'postal': $("#zip").val(),
 				'birthdate' : $("#birthDate").val(), 'phone': $("#phone").val(), 
-                'email':$("#email").val(), 'badgeName': $("#badgeName").val()
-			}, 
-			'staff': {
-				'twitter': $("#twitter").val(), 'telegram': $("#telegram").val(),
+                'email':$("#email").val(), 'badgeName': $("#badgeName").val()};
+			data['event'] = '{{event}}';
+		
+		console.log(typeof $('#division').val());
+		console.log($('#division').val() == 4); 
+		
+		
+		if($('#division').val() == 1){
+			
+			if($('#title').val() == 1){
+				reportedDept = "46"; 
+			}
+			
+			if($('#title').val() == 2){
+				reportedDept = "45";
+			}
+		}
+		else{
+		
+			if($('#title').val() == 3){
+				reportedDept = "47";
+			}
+			
+			else{
+				reportedDept = $('#department').val(); 
+			}
+		}
+		
+		//prepare AccomodationType
+		var staffAccom = '';
+		
+		if($("#accommodation").val() == "0"){
+			staffAccom = "Crash Space"; 
+		}
+		else if($("#accommodation").val() == "1"){
+			staffAccom = "Room Reimbursement";
+		}
+		else if($("#accommodation").val() == "2"){
+			staffAccom = "None";
+		}
+		else{
+			staffAccom = ""; 
+		}
+		
+		
+		//Prepare the requests/blacklist if accommodation type is 0.  
+		var roomList = ""; 
+		var blackList = ""; 
+		
+		if($("#accommodation").val() == "0"){
+			roomList = $("#whitelist").val();
+			blackList = $("#blacklist").val();
+		}
+		
+		console.log('reporteddept', reportedDept); 
+		
+			data['staff'] = {
 				'shirtsize': $("#shirt").val(), 'specialSkills': $("#skills").val(),
 				'specialFood': $("#food").val(), 'specialMedical': $("#medical").val(),
 				'contactPhone': $("#contactPhone").val(), 'contactName': $("#contactName").val(),
 				'contactRelation': $("#contactRel").val(),
-			},
-            'priceLevel': { 'id': $(".selectLevel")[0].id.split('_')[1], 'options': getOptions() },
-            'event': '{{event}}'
-		};
+				'department': reportedDept,
+				'division': $("#division").val(),
+				'title': $("#title").val(),
+				'accommodationType':staffAccom,
+				'roommateRequests':roomList,
+				'roomateBlacklist':blackList,
+				'discord':$("#discord").val()
+			}
+			console.log(data);
+	
 		
 
 		$.ajax({
@@ -152,13 +211,25 @@
 				    alert("Your session has expired.");
 			    } else {
                     alert("An error has occurred. Please check the form for any error messages. If this error continues, please contact {{ event.staffEmail }} for assistance.")
-			    }
+					console.log('request went to', "{% url 'addNewStaff' %}");
+					//console.log(result,status,error);
+					//console.log(result.responseText);
+					console.log(data); 
+				}
 			    $("#register").removeAttr("disabled");
 		    },
             "success": function (result, status) {
                 if (result.success)
                 {
- 	                window.location = "{% url 'cart' %}";
+ 	                if(data.staff.priceLevel == undefined){
+						window.location = "{% url 'doneStaff' %}";
+					}
+					else{
+						window.location = "{% url 'cart' %}";
+					}
+					
+					console.log(data); 
+					console.log('hhhhh');
 			    } else {
                     alert("An error has occurred. Please check the form for any error messages. If this error continues, please contact {{ event.staffEmail }} for assistance.")
 			    }
