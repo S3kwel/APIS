@@ -18,7 +18,7 @@
   </div>
 </div>
 
-    {% if not token %}
+    {% if not token and auth == True%}
 		<h1>New Staff Registration <br/>{{event}}</h1>
         <p>Your session has expired. Please use the link in your registration email again to start over.</p>
     {% else %}
@@ -26,56 +26,15 @@
 	<form class="form-horizontal" role="form" data-toggle="validator">
 	<div class="tab-content">
 	<div role="tabpanel" class="tab-pane fade in active" id="personal">
-		{%if token == "DEFAULT" %}
-		<!-- <div class = 'test bg-danger warning container-fluid'> -->
-			<!-- <div class = 'row warning-header'> -->
-				<!-- <div class = 'col-1'> -->
-					<!-- <button type = 'button' class = 'btn btn-sm warning-exit'>X</button> -->
-				<!-- </div>  -->
-			
-				<!-- <div class = 'col-11'> -->
-					<!-- <h5>A NOTE FROM IT FOR 2019!</h5> -->
-				<!-- </div>  -->
-			<!-- </div>  -->
-			
-			<!-- <div class = 'row'> -->
-				<!-- <div class = 'col-12 warning-body'> -->
-					<!-- We aren't collecting payments or handling event registration from this system this year. The message below is for future-proofing only.  <b><i>Disregard the hell out of it.</i></b>  -->
-				<!-- </div>  -->
-			<!-- </div>  -->
-		<!-- </div> -->
-		
-		
-		
-		<!-- <div class = 'bg-warning warning container-fluid'> -->
-			<!-- <div class = 'row warning-header'> -->
-				<!-- <div class = 'col-1'> -->
-					<!-- <button type = 'button' class = 'btn btn-sm warning-exit'>X</button> -->
-				<!-- </div>  -->
-			
-				<!-- <div class = 'col-11'> -->
-					<!-- <h5>NOTICE</h5> -->
-				<!-- </div>  -->
-			<!-- </div>  -->
-			
-			<!-- <div class = 'row'> -->
-				<!-- <div class = 'col-12 warning-body'> -->
-					<!-- You are currently using a generic token and will not be able to pay for <i>event</i> registration.  Please contact <a href='mailto:{{event.staffEmail}}'>{{event.registrationEmail}}</a>  to receive a registration email. -->
-				<!-- </div>  -->
-			<!-- </div>  -->
-		<!-- </div>  -->
-		
-		{%endif%}
 		<h1>{{event}}<small>&nbsp; Staff Registration</small></h1>
-		
-		<p>Please review and update the information below. If you have any questions about this form, please contact <a href='mailto:{{ event.staffEmail }}'>{{ event.staffEmail }}</a>. Required fields are marked with a red asterisk (<span style="color:red;">*</span>)</p>
 
+		<p>Please review and update the information below. If you have any questions about this form, please contact <a href='mailto:{{ event.staffEmail }}'>{{ event.staffEmail }}</a>. Required fields are marked with a red asterisk (<span style="color:red;">*</span>)</p>
         {% show_attendee_form event=event %}
 
         {% show_staff_form staff %}
-
 		
-		{%if token != "DEFAULT"%}
+		{%if auth == True and event.staffEventRegistration == True%}
+		
         <hr/>
         <h3>Badge Level</h3>
         <br/>
@@ -86,7 +45,7 @@
 
             <div class="form-group form-inline agree">
                 <div class="col-sm-12">
-                    <input type="checkbox" id="agreeToRules" name="agreeToRules" class="form-controlform-control-checkbox" required />
+                    <input type="checkbox" id="agreeToRules" name="agreeToRules" class="form-control form-control-checkbox" required />
 			        I agree to abide by {{event}}'s <a href="{{ event.codeOfConduct }}">Code of Conduct.</a>
                 </div>
 		        <div class="col-sm-offset-1 help-block with-errors" style="padding-left:15px;"></div>
@@ -109,19 +68,30 @@
 
 {% block javascript %}
 <script>
-    var discount = {{event.newStaffDiscount.amountOff}}
-    var adult = true;
+	//Pass things here to allow external scripts to use the data. 
+	var auth_token = '{{event.useAuthToken}}';
+		auth_token = Boolean(auth_token)
+	 
 </script>
+
 <script type="text/javascript" src="/static/js/templates/price-types.js"></script>
 <script type="text/javascript" src="/static/js/templates/staff.js"></script>
- <script type="text/javascript">
+<script type="text/javascript">
 
 	$("#register").click(doRegister);
-	$(".warning-exit").click(e=>{
-		$(e.currentTarget).parent().parent().parent().fadeOut(300); 
-	});
+
+	//Handle no staff discount.  
+	{% if not event.newStaffDiscount.amountOff%}
+	console.warn("EM: No staff discount found!"); 
+	var adult = true;
+   	var discount = false;
+
+	{% else %}
+	alert("JS2"); 
+	var adult = true;
+    var discount = {{event.newStaffDiscount.amountOff}};
 	
-	
+	{% endif %}
 
 	function doRegister(e) {
 		console.log($('#division').val()); 

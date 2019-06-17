@@ -159,21 +159,21 @@ def getCartItemOptionTotal(options):
     optionTotal = 0
     for option in options:
         optionData = PriceLevelOption.objects.get(id=option['id'])
-        if optionData.optionExtraType == 'int':
-            if option['value']:
-                optionTotal += (optionData.optionPrice*Decimal(option['value']))
-        else:
-            optionTotal += optionData.optionPrice
+        #if optionData.optionExtraType == 'int':
+            #if option['value']:
+                #optionTotal += (optionData.optionPrice*Decimal(option['value']))
+        #else:
+        optionTotal += optionData.optionPrice
     return optionTotal
 
 def getOrderItemOptionTotal(options):
     optionTotal = 0
     for option in options:
-        if option.option.optionExtraType == 'int':
-            if option.optionValue:
-                optionTotal += (option.option.optionPrice*Decimal(option.optionValue))
-        else:
-            optionTotal += option.option.optionPrice
+        #if option.option.optionExtraType == 'int':
+            #if option.optionValue:
+                #optionTotal += (option.option.optionPrice*Decimal(option.optionValue))
+        #else:
+        optionTotal += option.option.optionPrice
     return optionTotal
 
 def getDiscountTotal(disc, subtotal):
@@ -235,11 +235,11 @@ def getDealerTotal(orderItems, discount, dealer):
     for item in orderItems:
         itemSubTotal = item.priceLevel.basePrice
         for option in item.attendeeoptions_set.all():
-            if option.option.optionExtraType == 'int':
-                if option.optionValue:
-                    itemSubTotal += (option.option.optionPrice*Decimal(option.optionValue))
-            else:
-                itemSubTotal += option.option.optionPrice
+            #if option.option.optionExtraType == 'int':
+                #if option.optionValue:
+                    #itemSubTotal += (option.option.optionPrice*Decimal(option.optionValue))
+            #else:
+            itemSubTotal += option.option.optionPrice
     partnerCount = dealer.getPartnerCount()
     partnerBreakfast = 0
     if partnerCount > 0 and dealer.asstBreakfast:
@@ -284,9 +284,14 @@ def applyDiscount(request):
 ###################################
 # New Staff
 
-def newStaff(request, guid='DEFAULT'):
+def newStaff(request, guid=False):
     event = Event.objects.get(default=True)
     context = {'token': guid, 'event': event}
+    if not guid:
+        if event.useAuthToken == True:
+            return render(request,'registration/staff/error.html',context)
+        else:
+            return render(request,'registration/staff/staff-new-payment.html',context)
     return render(request, 'registration/staff/staff-new.html', context)
 
 def findNewStaff(request):
@@ -295,9 +300,7 @@ def findNewStaff(request):
     postData = json.loads(request.body)
     email = postData['email']
     token = postData['token']
-    if token == "DEFAULT":
-        return JsonResponse({'success': True, 'message':'STAFF'})
-        token = TempToken.objects.get(email__iexact=email, token=token)
+    token = TempToken.objects.get(email__iexact=email, token=token)
     if not token:
         print("NO TOKEN ")
         return HttpResponseServerError("No Staff Found")
@@ -318,13 +321,17 @@ def findNewStaff(request):
 # TODO: Eventually work this into the event w/ better handling 
 def infoNewStaff(request):
     event = Event.objects.get(default=True)
-    try:
-      tokenValue = request.session["newStaff"]
-      token = TempToken.objects.get(token=tokenValue)
-    except Exception as e:
-      context = {'staff': None, 'event': event, 'token': "DEFAULT"}
-      return render(request, 'registration/staff/staff-new-payment.html', context)
-    context = {'staff': None, 'event': event, 'token': token}
+    if event.useAuthToken == True:
+        try:
+          tokenValue = request.session["newStaff"]
+          token = TempToken.objects.get(token=tokenValue)
+          context = {'staff': None, 'event': event, 'token': token, 'auth':True}
+        except Exception as e:
+          token = None
+          context = {'staff': None, 'event': event, 'token': token, 'auth':True}
+    else:
+        token = "DEFAULT"
+        context = {'staff': None, 'event': event, 'token': token, 'auth': False}
     return render(request, 'registration/staff/staff-new-payment.html', context)
 def addNewStaff(request):
     postData = json.loads(request.body)
@@ -944,7 +951,6 @@ def checkoutDealer(request):
             status, message, order = doZeroCheckout(discount, None, orderItems)
             if not status:
               return JsonResponse({'success': False, 'message': message})
-
             request.session.flush()
 
             try:
@@ -1745,13 +1751,13 @@ def getCart(request):
             for option in pdo:
                 dataOption = {}
                 optionData = PriceLevelOption.objects.get(id=option['id'])
-                if optionData.optionExtraType == 'int':
-                    if option['value']:
-                        itemTotal = (optionData.optionPrice*Decimal(option['value']))
-                        dataOption = {'name': optionData.optionName, 'number': option['value'], 'total': itemTotal}
-                else:
-                    itemTotal = optionData.optionPrice
-                    dataOption = {'name': optionData.optionName, 'total': itemTotal}
+                #if optionData.optionExtraType == 'int':
+                    #if option['value']:
+                        #itemTotal = (optionData.optionPrice*Decimal(option['value']))
+                        #dataOption = {'name': optionData.optionName, 'number': option['value'], 'total': itemTotal}
+                #else:
+                itemTotal = optionData.optionPrice
+                dataOption = {'name': optionData.optionName, 'total': itemTotal}
                 options.append(dataOption)
             orderItem = {
                 'id' : cart.id,
@@ -1815,16 +1821,15 @@ def saveCart(cart):
 
     for option in pdp['options']:
         plOption = PriceLevelOption.objects.get(id=int(option['id']))
-        if plOption.optionExtraType == 'int' and option['value'] == '':
-            attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue='0')
-        else:
-            if option['value'] != '':
-                attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
+        #if plOption.optionExtraType == 'int' and option['value'] == '':
+            #attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue='0')
+        #else:
+        if option['value'] != '':
+            attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
         attendeeOption.save()
 
     cart.transferedDate = datetime.now()
     cart.save()
-
     return orderItem
 
 def addToCart(request):
@@ -2149,7 +2154,7 @@ def getOptionsDict(orderItems):
                 orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue, 'id': ao.option.id, 'image': None})
 
             orderDict.append({'name': ao.option.optionName, 'value': ao.optionValue,
-                              'id': ao.option.id, 'type': ao.option.optionExtraType})
+                              'id': ao.option.id})
     return orderDict
 
 def getEvents(request):
@@ -2199,16 +2204,16 @@ def getPriceLevelList(levels):
         'id':level.id,
         'base_price': level.basePrice.__str__(),
         'description': level.description,
+		'optionImage': level.getOptionImage(),
         'options': [{
             'name': option.optionName,
             'value': option.optionPrice,
             'id': option.id,
             'required': option.required,
             'active': option.active,
-            'type': option.optionExtraType,
             'image': option.getOptionImage(),
             'description': option.description,
-            'list': option.getList()
+            'list': option.getList(),
             } for option in level.priceLevelOptions.order_by('rank', 'optionPrice').all() ]
           } for level in levels ]
     return data

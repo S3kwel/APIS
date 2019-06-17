@@ -1,3 +1,4 @@
+#NEW
 from __future__ import unicode_literals
 import json
 import random
@@ -52,9 +53,9 @@ def content_file_name(instance, filename):
 class PriceLevelOption(models.Model):
     optionName = models.CharField(max_length=200)
     optionPrice = models.DecimalField(max_digits=6, decimal_places=2)
-    optionExtraType = models.CharField(max_length=100, blank=True)
-    optionExtraType2 = models.CharField(max_length=100, blank=True)
-    optionExtraType3 = models.CharField(max_length=100, blank=True)
+    #optionExtraType = models.CharField(max_length=100, blank=True)
+    #optionExtraType2 = models.CharField(max_length=100, blank=True)
+    #optionExtraType3 = models.CharField(max_length=100, blank=True)
     optionImage = models.ImageField(upload_to=content_file_name,blank=True,null=True)
     required = models.BooleanField(default=False)
     active = models.BooleanField(default=False)
@@ -65,12 +66,12 @@ class PriceLevelOption(models.Model):
         return '{0} (${1})'.format(self.optionName, self.optionPrice)
 
     def getList(self):
-        if self.optionExtraType in ["int", "bool", "string"]:
-            return []
-        elif self.optionExtraType == "ShirtSizes":
-            return [{'name':s.name, 'id':s.id} for s in ShirtSizes.objects.all()]
-        else:
-            return []
+        #if self.optionExtraType in ["int", "bool", "string"]:
+            #return []
+        #if self.optionExtraType == "ShirtSizes":
+            #return [{'name':s.name, 'id':s.id} for s in ShirtSizes.objects.all()]
+        #else:
+        return []
     def getOptionImage(self):
         if self.optionImage is None:
             return None
@@ -83,7 +84,9 @@ class PriceLevelOption(models.Model):
 class PriceLevel(models.Model):
     name = models.CharField(max_length=100)
     priceLevelOptions = models.ManyToManyField(PriceLevelOption, blank=True)
+    optionImage = models.ImageField(upload_to=content_file_name,blank=True,null=True)
     description = models.TextField()
+    quantity = models.IntegerField(default=0)
     basePrice = models.DecimalField(max_digits=6, decimal_places=2)
     startDate = models.DateTimeField()
     endDate = models.DateTimeField()
@@ -96,6 +99,14 @@ class PriceLevel(models.Model):
 
     def __str__(self):
       return self.name
+    def getOptionImage(self):
+        if self.optionImage is None:
+            return None
+        else:
+            try:
+                return self.optionImage.url
+            except ValueError:
+                return None
 
 class Charity(LookupTable):
     url = models.CharField(max_length=500,
@@ -104,9 +115,9 @@ class Charity(LookupTable):
         blank=True)
 
 class Event(LookupTable):
-    dealerRegStart = models.DateTimeField(verbose_name="Dealer Registration Start",
-        help_text="Start date and time for dealer applications")
-    dealerRegEnd = models.DateTimeField(verbose_name="Dealer Registration End")
+    #dealerRegStart = models.DateTimeField(verbose_name="Dealer Registration Start",
+        #help_text="Start date and time for dealer applications")
+    #dealerRegEnd = models.DateTimeField(verbose_name="Dealer Registration End")
     staffRegStart = models.DateTimeField(verbose_name="Staff Registration Start",
         help_text="(Not currently enforced)")
     staffRegEnd = models.DateTimeField(verbose_name="Staff Registration End")
@@ -119,18 +130,22 @@ class Event(LookupTable):
     eventEnd = models.DateField(verbose_name="Event End Date")
     default = models.BooleanField(default=False, verbose_name="Default",
         help_text="The first default event will be used as the basis for all current event configuration")
-    newStaffDiscount = models.ForeignKey(Discount, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name='newStaffEvent',
-        verbose_name="New Staff Discount",
-        help_text="Apply a discount for new staff registrations")
-    staffDiscount = models.ForeignKey(Discount, null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="staffEvent",
-        verbose_name="Staff Discount",
-        help_text="Apply a discount for any staff registrations")
-    dealerDiscount = models.ForeignKey(Discount, null=True, blank=True, 
-        on_delete=models.SET_NULL, related_name="dealerEvent",
-        verbose_name="Dealer Discount",
-        help_text="Apply a discount for any dealer registrations")
+    useAuthToken = models.BooleanField(default=True, verbose_name="Auth Tokens for Staff Registration ",
+        help_text="Staff cannot register for the event (or take advantage of staff discounts) when auth tokens are not in use. ")
+    staffEventRegistration = models.BooleanField(default=False, verbose_name="Allow event registration during staff signup.",
+        help_text="If on, staff will be allowed to register for the event when they fill out the staff form.")
+    #newStaffDiscount = models.ForeignKey(Discount, null=True, blank=True,
+        #on_delete=models.SET_NULL, related_name='newStaffEvent',
+        #verbose_name="New Staff Discount",
+        #help_text="Apply a discount for new staff registrations")
+    #staffDiscount = models.ForeignKey(Discount, null=True, blank=True,
+        #on_delete=models.SET_NULL, related_name="staffEvent",
+        #verbose_name="Staff Discount",
+        #help_text="Apply a discount for any staff registrations")
+    #dealerDiscount = models.ForeignKey(Discount, null=True, blank=True, 
+        #on_delete=models.SET_NULL, related_name="dealerEvent",
+        #verbose_name="Dealer Discount",
+        #help_text="Apply a discount for any dealer registrations")
     allowOnlineMinorReg = models.BooleanField(default=False,
         verbose_name="Allow online minor registration",
         help_text="Allow registration for anyone age 13 and older online. "
@@ -154,11 +169,11 @@ class Event(LookupTable):
         help_text="Email to display on error messages for staff registration",
         blank=True,
         default=settings.APIS_DEFAULT_EMAIL)
-    dealerEmail = models.CharField(max_length=200,
-        verbose_name="Dealer Email",
-        help_text="Email to display on error messages for dealer registration",
-        blank=True,
-        default=settings.APIS_DEFAULT_EMAIL)
+    #dealerEmail = models.CharField(max_length=200,
+        #verbose_name="Dealer Email",
+        #help_text="Email to display on error messages for dealer registration",
+        #blank=True,
+        #default=settings.APIS_DEFAULT_EMAIL)
     badgeTheme = models.CharField(max_length=200,
         verbose_name="Badge Theme",
         help_text="Name of badge theme to use for printing",
@@ -169,7 +184,7 @@ class Event(LookupTable):
         help_text="Link to code of conduct agreement",
         blank=True,
         default='/code-of-conduct')
-    charity = models.ForeignKey(Charity, null=True, blank=True, on_delete=models.SET_NULL)
+    #charity = models.ForeignKey(Charity, null=True, blank=True, on_delete=models.SET_NULL)
 
 class TableSize(LookupTable):
     description = models.TextField()
@@ -195,6 +210,7 @@ class Department(models.Model):
     def __str__(self):
       return self.name
 
+#MODS MADE FOR ASUA
 class Division(models.Model):
     name = models.CharField(max_length=200, blank=True)
 
@@ -347,10 +363,11 @@ class Staff(models.Model):
     registrationToken = models.CharField(max_length=200, default=getRegistrationToken)
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
     division = models.ForeignKey(Division, null=True, blank=True, on_delete=models.SET_NULL)
-    supervisor = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    #supervisor = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
+    #NOTE: Changed to foreignKey 
     title = models.ForeignKey(Title, null=True, blank=True, on_delete=models.SET_NULL)
-    twitter = models.CharField(max_length=200, blank=True)
-    telegram = models.CharField(max_length=200, blank=True)
+    #twitter = models.CharField(max_length=200, blank=True)
+    #telegram = models.CharField(max_length=200, blank=True)
     shirtsize = models.ForeignKey(ShirtSizes, null=True, blank=True, on_delete=models.SET_NULL)
     timesheetAccess = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
@@ -360,15 +377,15 @@ class Staff(models.Model):
     contactName = models.CharField(max_length=200, blank=True)
     contactPhone = models.CharField(max_length=200, blank=True)
     contactRelation = models.CharField(max_length=200, blank=True)
-    needRoom = models.BooleanField(default=False)
+    #needRoom = models.BooleanField(default=False)
     gender = models.CharField(max_length=50, blank=True)
     event = models.ForeignKey(Event, null=True, blank=True, on_delete=models.CASCADE)
     checkedIn = models.BooleanField(default=False)
+    #Changes for accommodations.  
     accommodationType = models.CharField(max_length=50, blank=True)
     roommateRequests = models.CharField(max_length=200, blank=True)
     roomateBlacklist = models.CharField(max_length=200, blank=True)
     discord = models.CharField(max_length=200, blank=True)
-
     def __str__(self):
       return '%s %s' % (self.attendee.firstName, self.attendee.lastName)
 
@@ -548,8 +565,8 @@ class AttendeeOptions(models.Model):
     optionValue3 = models.CharField(max_length=200, blank=True)
 
     def getTotal(self):
-        if self.option.optionExtraType == "int":
-            return int(self.optionValue) * self.option.optionPrice
+        #if self.option.optionExtraType == "int":
+            #return int(self.optionValue) * self.option.optionPrice
         return self.option.optionPrice
 
     def __str__(self):

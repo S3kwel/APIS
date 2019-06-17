@@ -26,11 +26,10 @@ urlpatterns = [
     url(r'^newstaff/done/?$', views.staffDone, name='doneNewStaff'),
     url(r'^newstaff/lookup/?$', views.findNewStaff, name='findNewStaff'),
     url(r'^newstaff/info/?$', views.infoNewStaff, name='infoNewStaff'),
-    url(r'^staff/?$', views.infoNewStaff, name='test'),
-	url(r'^newstaff/add/?$', views.addNewStaff, name='addNewStaff'),
-    url(r'^newstaff/(?P<guid>\w+)/?$', views.newStaff, name='newstaff'),
-    url(r'^newstaff/?$', views.newStaff, name='newstaff'), #ADDED TO HANDLE NULL TOKENS      
-
+    url(r'^newstaff/add/?$', views.addNewStaff, name='addNewStaff'),
+    url(r'^newstaff/(?P<guid>\w+)/?$', views.newStaff, name='newstaff'),    
+    url(r'^newstaff/', views.newStaff, name='newstaff'),    
+	
     url(r'^dealer/?$', views.newDealer, name='newDealer'),
     url(r'^dealer/addNew/?$', views.addNewDealer, name='addNewDealer'),
     url(r'^dealer/done/?$', views.doneDealer, name='doneDealer'),

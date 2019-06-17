@@ -6,15 +6,16 @@
 <script type="text/html" id="levelTemplate">
     <div class="col-xs-6 col-sm-6 col-md-6 col-lg-4">
     <div class="panel price">
-        <div class="panel-heading  text-center">
+        <div class="panel-heading  text-center" style='color: white; font-weight: strong z-index: 1; position: relative;'>
             <h3 data-content="name"></h3>
         </div>
-        <div class="panel-body text-center">
-            <p class="lead" style="font-size:40px"><strong data-content="price"></strong></p>
+		<img data-src="img" style ='display:none' class='priceImg'></img>
+        <div class="panel-body text-center" style=''>
+            <p class="lead" style="color: white; font-weight: strong z-index: 2; position: relative; font-size:40px"><strong data-content="price"></strong></p>
         </div>
-        <div class="panel-footer">
-            <a class="btn btn-lg btn-block btn-danger selectLevel" data-id="levelId">Select</a>
-            <a class="btn btn-default btn-block changeLevel">Change Level?</a>
+        <div class="panel-footer" style = 'color: white; font-weight: strong z-index: 2; position: relative'>
+            <a class="btn btn-lg btn-block btn-primary selectLevel" data-id="levelId">Select</a>
+            <a class="btn btn-lg btn-block btn-default changeLevel">Change Level?</a>
         </div>
     </div>
     </div>
@@ -29,13 +30,32 @@
     </div>
 </script>
 
+<!-- <script type="text/html" id="optionBoolTemplate"> -->
+    <!-- <div class="form-group"> -->
+        <!-- <label class="col-sm-3 control-label" data-content="name"></label> -->
+        <!-- <div class="col-sm-9"> -->
+            <!-- <input type="checkbox" data-id="id" class="form-control form-control-text levelOptions" /> -->
+        <!-- </div> -->
+    <!-- </div> -->
+<!-- </script> -->
+
 <script type="text/html" id="optionBoolTemplate">
-    <div class="form-group">
-        <label class="col-sm-3 control-label" data-content="name"></label>
-        <div class="col-sm-9">
-            <input type="checkbox" data-id="id" class="form-control form-control-text levelOptions" />
-        </div>
-    </div>
+    <div class='container-fluid'>
+	
+	
+
+	<div class='row'>
+		<div class = 'form-group'>
+			<div class = 'col-sm-2'>
+				<input type="checkbox" data-id="id" class="levelOptions"/>
+			</div>
+			
+			<div class = 'col-sm-10'>
+				<label data-content="name" style="font-weight:bold"></label>
+			</div> 
+		</div>
+	</div>
+	</div> 
 </script>
 
 <script type="text/html" id="optionBoolReqTemplate">

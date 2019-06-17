@@ -44,8 +44,8 @@ async function getOptionsFromJSON(path){
 	})
 	if(multiOptions == true){
 		let topMenu = []; 
-		console.log(divDeps); 
-		var divs = await getOptionsFromJSON("/registration/divisions"); 
+		console.log(divDeps);
+		let divs = await getOptionsFromJSON("/registration/divisions");
 		let divData = divs.d; 
 		
 		for(k of Object.keys(divDeps)){
@@ -110,9 +110,6 @@ async function getOptionsFromJSON(path){
 		$('#division').find('option').each((key, val)=>{
 			let v = val.value;
 			let divObj = divs.d[key];
-			
-			
-			
 			
 			if(divObj != undefined){
 				console.log(divObj.id); 

@@ -1,3 +1,4 @@
+#NEW
 from datetime import date
 import copy
 
@@ -24,7 +25,7 @@ import printing
 import cgi
 
 admin.site.site_url = None
-admin.site.site_header = 'Admin Panel'
+admin.site.site_header = 'Admin Panel [DEV]'
 
 # Register your models here.
 admin.site.register(HoldType)
@@ -41,10 +42,11 @@ class EventForm(forms.ModelForm):
         model = Event
         exclude = []
 
-
 class EventAdmin(NestedModelAdmin,ImportExportModelAdmin):
-    list_display = ('name','id',)   
+    list_display = ('name','useAuthToken','staffEventRegistration')   
     form = EventForm
+    class Media:
+        js = ("js/templates/eventadmin.js","js/jquery.js")
 admin.site.register(Event,EventAdmin)
 
 def disable_two_factor(modeladmin, request, queryset):
@@ -125,11 +127,26 @@ class DealerAsstInline(NestedTabularInline):
     model=DealerAsst
     extra=0
 
-class DealerAsstAdmin(admin.ModelAdmin):
+class DealerAsstResource(resources.ModelResource):
+    class Meta:
+        model = DealerAsst
+        fields = ('id', 'name', 'email', 'license', 'event__name',
+                  'dealer__businessName', 'dealer__attendee__email',
+                  'dealer__approved', 'dealer__tableNumber')
+
+class DealerAsstAdmin(ImportExportModelAdmin):
     save_on_top = True
-    list_display = ('name', 'email', 'license', 'event' )
-    list_filter = ('event',)
+    list_display = ('name', 'email', 'license', 'event', 'dealer_businessname', 'dealer_approved' )
+    list_filter = ('event', 'dealer__approved')
     search_fields = ['name', 'email']
+    readonly_fields = ['dealer_businessname', 'dealer_approved']
+    resource_class = DealerAsstResource
+
+    def dealer_businessname(self, obj):
+        return obj.dealer.businessName
+
+    def dealer_approved(self, obj):
+        return obj.dealer.approved
 
 admin.site.register(DealerAsst, DealerAsstAdmin)
 
@@ -139,22 +156,22 @@ class DealerResource(resources.ModelResource):
         fields = ('id', 'event__name', 'attendee__firstName', 'attendee__lastName', 'attendee__address1',
                   'attendee__address2', 'attendee__city', 'attendee__state', 'attendee__country',
                   'attendee__postalCode', 'attendee__phone', 'attendee__email',
-                  'businessName', 'approved', 'website', 'description', 'license', 'needPower', 'needWifi',
+                  'businessName', 'approved', 'website', 'description', 'license', 'needPower', 'needWifi', 'chairs', 'tables',
                   'wallSpace', 'nearTo', 'farFrom', 'tableSize__name', 'reception', 'artShow',
-                  'charityRaffle', 'breakfast', 'asstBreakfast', 'willSwitch', 'partners', 'buttonOffer', 'discount',
+                  'charityRaffle', 'breakfast', 'asstBreakfast', 'willSwitch', 'buttonOffer', 'discount',
                   'discountReason', 'emailed')
         export_order = ('id', 'event__name', 'attendee__firstName', 'attendee__lastName', 'attendee__address1',
                   'attendee__address2', 'attendee__city', 'attendee__state', 'attendee__country',
                   'attendee__postalCode', 'attendee__phone', 'attendee__email',
-                  'businessName', 'approved', 'website', 'description', 'license', 'needPower', 'needWifi',
+                  'businessName', 'approved', 'website', 'description', 'license', 'needPower', 'needWifi', 'chairs', 'tables',
                   'wallSpace', 'nearTo', 'farFrom', 'tableSize__name', 'reception', 'artShow',
-                  'charityRaffle', 'breakfast', 'asstBreakfast', 'willSwitch', 'partners', 'buttonOffer', 'discount',
+                  'charityRaffle', 'breakfast', 'asstBreakfast', 'willSwitch', 'buttonOffer', 'discount',
                   'discountReason', 'emailed')
 
 
 class DealerAdmin(NestedModelAdmin, ImportExportModelAdmin):
     list_display = ('attendee', 'businessName', 'tableSize', 'chairs', 'tables', 'needWifi', 'approved', 'tableNumber', 'emailed', 'paidTotal', 'event')
-    list_filter = ('event',)
+    list_filter = ('event', 'approved', 'emailed')
     save_on_top = True
     inlines = [DealerAsstInline]
     resource_class = DealerResource
@@ -637,11 +654,13 @@ class BadgeResource(resources.ModelResource):
 
     class Meta:
         model = Badge
-        fields = ('id', 'event__name', 'printed', 'badge_level', 'attendee__firstName', 'attendee__lastName', 'attendee__address1',
+        fields = ('id', 'event__name', 'printed', 'badge_level', 'registeredDate',
+                  'attendee__firstName', 'attendee__lastName', 'attendee__address1',
                   'attendee__address2', 'attendee__city', 'attendee__state', 'attendee__country',
                   'attendee__postalCode', 'attendee__phone', 'attendee__email', 'badgeName', 'badgeNumber', 'attendee__aslRequest'
                   )
-        export_order = ('id', 'printed', 'event__name', 'badge_level', 'attendee__firstName', 'attendee__lastName', 'attendee__address1',
+        export_order = ('id', 'printed', 'event__name', 'badge_level', 'registeredDate', 
+                  'attendee__firstName', 'attendee__lastName', 'attendee__address1',
                   'attendee__address2', 'attendee__city', 'attendee__state', 'attendee__country',
                   'attendee__postalCode', 'attendee__phone', 'attendee__email', 'badgeName', 'badgeNumber', 'attendee__aslRequest'
                   )
@@ -722,19 +741,75 @@ class AttendeeAdmin(ImportExportModelAdmin):
             )}
         ),
     )
-
     def get_age_range(self, obj):
-        born = obj.birthdate
-        today = date.today()
-        age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-        if age >= 18: return format_html('<span>18+</span>')
-        return format_html('<span style="color:red">MINOR FORM<br/>REQUIRED</span>')
-    get_age_range.short_description = "Age Group"
-
-
-
+       born = obj.birthdate
+       today = date.today()
+       age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+       if age >= 18: return format_html('<span>18+</span>')
+       return format_html('<span style="color:red">MINOR FORM<br/>REQUIRED</span>')
+       get_age_range.short_description = "Age Group"
 admin.site.register(Attendee, AttendeeAdmin)
 admin.site.register(AttendeeOptions)
+
+class PriceLevelFilter(admin.SimpleListFilter):
+    title = 'badge level'
+    parameter_name = 'badgelevel'
+
+    def lookups(self, request, model_admin):
+        priceLevels = PriceLevel.objects.all()
+        return tuple((lvl.name, lvl.name) for lvl in priceLevels)
+
+    def queryset(self, request, queryset):
+        priceLevel = self.value()
+        if priceLevel:
+            return queryset.filter(orderitem__priceLevel__name=priceLevel)
+
+class BadgeAdmin(NestedModelAdmin, ImportExportModelAdmin):
+    list_per_page = 30
+    inlines = [OrderItemInline]
+    resource_class = BadgeResource
+    save_on_top = True
+    list_filter = ('event', 'printed', PriceLevelFilter)
+    list_display = ('attendee', 'badgeName', 'badgeNumber', 'printed', 'paidTotal', 'effectiveLevel', 'abandoned',
+                    'get_age_range', 'registeredDate')
+    search_fields = ['attendee__email', 'attendee__lastName', 'attendee__firstName', 'badgeName', 'badgeNumber']
+    readonly_fields = ['get_age_range' ]
+    actions = [assign_badge_numbers, print_badges, print_label_badges, print_dealerasst_badges, assign_numbers_and_print,
+               print_dealer_badges, assign_staff_badge_numbers, print_staff_badges, send_upgrade_form_email,
+               'cull_abandoned_carts']
+    fieldsets = (
+        (
+	    None,
+            {'fields':(
+                'printed',
+                ('badgeName', 'badgeNumber', 'get_age_range'),
+                ('registeredDate', 'event'),
+                'attendee',
+            )}
+        ),
+    )
+
+    def get_age_range(self, obj):
+        try:
+            born = obj.attendee.birthdate
+            today = date.today()
+            age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+            if age >= 18: return format_html('<span>18+</span>')
+            return format_html('<span style="color:red">MINOR FORM<br/>REQUIRED</span>')
+        except:
+            return 'Invalid DOB'
+    get_age_range.short_description = "Age Group"
+
+    def cull_abandoned_carts(self, request, queryset):
+        abandoned = [ x for x in Badge.objects.filter() if x.abandoned == 'Abandoned' ]
+        for obj in abandoned:
+            obj.delete()
+        self.message_user(request, "Removed {0} abandoned orders.".format(len(abandoned)))
+    cull_abandoned_carts.short_description = "Cull Abandoned Carts (Use with caution!)"
+
+admin.site.register(Badge, BadgeAdmin)
+
+
 
 admin.site.register(OrderItem)
 
@@ -782,7 +857,7 @@ class PriceLevelAdmin(ImportExportModelAdmin):
 admin.site.register(PriceLevel, PriceLevelAdmin)
 
 class PriceLevelOptionAdmin(admin.ModelAdmin):
-    list_display = ('optionName', 'rank', 'optionPrice', 'optionExtraType', 'required', 'active')
+    list_display = ('optionName', 'rank', 'optionPrice', 'required', 'active')
 
 admin.site.register(PriceLevelOption, PriceLevelOptionAdmin)
 
@@ -801,13 +876,11 @@ class DivisionAdmin(ImportExportModelAdmin):
 class TitleAdmin(ImportExportModelAdmin):
     list_display = ('id', 'name')
     save_on_top = True
-
+    list_display = ('name', 'volunteerListOk')
 
 admin.site.register(Department, DepartmentAdmin)
 admin.site.register(Division, DivisionAdmin)
 admin.site.register(Title,TitleAdmin)
-
-
 
 class CashdrawerAdmin(admin.ModelAdmin):
     list_display = ('timestamp', 'action', 'total', 'tendered', 'user')
