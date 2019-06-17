@@ -29,10 +29,13 @@ admin.site.site_header = 'Admin Panel [DEV]'
 
 # Register your models here.
 admin.site.register(HoldType)
-admin.site.register(ShirtSizes)
 admin.site.register(Charity)
 admin.site.register(TableSize)
 admin.site.register(Cart)
+
+class ShirtSizesAdmin(ImportExportModelAdmin):
+    pass
+admin.site.register(ShirtSizes,ShirtSizesAdmin)  
 
 class EventForm(forms.ModelForm):
     class Meta:
