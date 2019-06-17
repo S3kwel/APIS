@@ -63,6 +63,14 @@ sudo venv/bin/pip install image
 sudo venv/bin/pip install requests
 sudo venv/bin/pip install backports.weakref
 
+## IF YOU NEED TO CLEAR MIGRATIONS (DEVELOPMENT ONLY)
+find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
+find . -path "*/migrations/*.pyc"  -delete
+sudo venv/bin/pip uninstall django==1.11.17
+sudo venv/bin/pip install django==1.11.17
+
+
+
 ## Collect static files.  
 ## default is [base dir for files]/APIS/static as per the settings.py provided. 
 sudo python manage.py collectstatic
