@@ -32,10 +32,11 @@ sudo cp /home/dhickman/APIS/SETUP/pull.sh /home/dhickman
 sudo cp /home/dhickman/APIS/SETUP/wsgi.py /home/dhickman/APIS/fm_eventmanager/wsgi.py
 sudo cp /home/dhickman/APIS/SETUP/settings.py /home/dhickman/APIS/fm_eventmanager/settings.py
 
-
+##Make pull.sh executable, owned by apache user group. 
 sudo chmod +x /home/dhickman/pull.sh
 sudo chown :www-data /home/dhickman/pull.sh
 
+##Spin up a virtual env. 
 sudo virtualenv -p python2 venv
 source venv/bin/activate
 
@@ -61,7 +62,7 @@ sudo venv/bin/pip install django-debug-toolbar
  
 
 ## Collect static files.  
-## default is [base dir for files]/APIS/static
+## default is [base dir for files]/APIS/static as per the settings.py provided. 
 sudo python manage.py collectstatic
 
 ## DB prep, credential creation.
@@ -72,10 +73,6 @@ sudo ./manage.py createsuperuser
 ## Test the server to make sure it works. 
 ## This also creates the db file used later.  
 sudo python manage.py runserver 0.0.0.0:8000
-
-
-## exit the venv
-deactivate
 
 ## Copy the apache conf file from the stup folder to /etc/apache2/sites-available/
 ## Alter the permissions for the sqlite db, give the www-data group ownership.    
@@ -90,12 +87,11 @@ sudo systemctl restart apache2
 ## The instance is now properly deployed.  The next steps work towards setting up a GIT push to the environment.  
 
 ## GIT WEBHOOK SETUP
-## ADD events/migrations/ to gitignore (not there by default -- be sure to pull after)
+
 ## Add urls.py and views.py to fm_eventmanager.
-## Add pull.sh to the User's root.  Including it in the repo makes changes hard.  
-## Make pull.sh executable, change its owner to the Apache user.  
-sudo chmod +x /home/dhickman/pull.sh
-sudo chown :www-data /home/dhickman/pull.sh
+sudo cp /home/dhickman/APIS/SETUP/views.py /home/dhickman/APIS/fm_eventmanager/views.py
+sudo cp /home/dhickman/APIS/SETUP/urls.py /home/dhickman/APIS/fm_eventmanager/urls.py
+
 
 ## Prep a Github web hook in the settings tab for the repo you are cloning.
 ## Point a web hook to http://[HOST ADDRESS]/api/pull/ and http://[HOST ADDRESS]:8000/api/pull/, using the key defined in settings.py on PUSH ONLY.
