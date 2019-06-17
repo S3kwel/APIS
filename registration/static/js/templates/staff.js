@@ -44,9 +44,8 @@ async function getOptionsFromJSON(path){
 	})
 	if(multiOptions == true){
 		let topMenu = []; 
-		console.log(divDeps);
-		
-		let divs = await getOptionsFromJSON("/registration/divisions");
+		console.log(divDeps); 
+		var divs = await getOptionsFromJSON("/registration/divisions"); 
 		let divData = divs.d; 
 		
 		for(k of Object.keys(divDeps)){
@@ -93,38 +92,38 @@ async function getOptionsFromJSON(path){
 		
 		//Title data.  
 		//Filter by group != 0 to avoid the chair team.   
-		// let titles = await getOptionsFromJSON("/registration/titles");
-		// titles.d.forEach(t=>{
-			// if(t.groupNo != 0){
-				// $('#title').append(titles.o[titles.d.indexOf(t)]);
-			// }
-		// });
+		let titles = await getOptionsFromJSON("/registration/titles");
+		titles.d.forEach(t=>{
+			if(t.groupNo != 0){
+				$('#title').append(titles.o[titles.d.indexOf(t)]);
+		 }
+		});
 	
         //Division / Department data. 
-		//let divMap = await getOptionsFromJSON("/registration/divmaps");
+		let divMap = await getOptionsFromJSON("/registration/divmaps");
 		
 		//console.log(divMap.top);
 		
-		//$("#division").append(divMap.top); 
+		$("#division").append(divMap.top); 
 		
-		
-		// $('#division').find('option').each((key, val)=>{
-			// let v = val.value;
-			// let divObj = divs.d[key];
+		var divs = await getOptionsFromJSON("/registration/divisions"); 
+		$('#division').find('option').each((key, val)=>{
+			let v = val.value;
+			let divObj = divs.d[key];
 			
 			
 			
 			
-			// if(divObj != undefined){
-				// console.log(divObj.id); 
-				// let id = divObj.id; 
-				// val.value = id; 
-				// val.innerHTML = divObj.name
-			// }
-			// else{
-				// console.log("UNDEFINED",key,val); 
-			// }
-		// });
+			if(divObj != undefined){
+				console.log(divObj.id); 
+				let id = divObj.id; 
+				val.value = id; 
+				val.innerHTML = divObj.name
+			}
+			else{
+				console.log("UNDEFINED",key,val); 
+			}
+		});
 
 
 		  
@@ -198,7 +197,7 @@ async function getOptionsFromJSON(path){
 						});
 				
 				}
-				//$('#department').replaceWith(department);
+				$('#department').replaceWith(department);
 			}); 
 			
 			$('#title').on('change',e =>{
