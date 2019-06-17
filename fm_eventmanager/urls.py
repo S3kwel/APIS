@@ -5,6 +5,7 @@ import views
 admin.autodiscover()
 
 urlpatterns = [
+    url("",include('registration.urls')),
     url(r'^registration/', include('registration.urls')),
     url(r'^backend/events/', include('events.urls')),
     url(r'^backend/volunteer/', include('volunteer.urls')),
