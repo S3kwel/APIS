@@ -85,6 +85,8 @@ sudo ./manage.py createsuperuser
 sudo python manage.py runserver 0.0.0.0:8000
 
 ## Copy the apache conf file from the stup folder to /etc/apache2/sites-available/
+sudo cp /home/dhickman/APIS/SETUP/000-default.conf /etc/apache2/sites-available/000-default.conf
+
 ## Alter the permissions for the sqlite db, give the www-data group ownership.    
 sudo chmod 664 ~/APIS/db.sqlite3
 sudo chown www-data:www-data /home/dhickman/APIS/db.sqlite3

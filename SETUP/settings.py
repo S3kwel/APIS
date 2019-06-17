@@ -65,7 +65,7 @@ LOGGING = {
 ADMINS = [('Dustin Hickman', 'dustin.hickman@animeusa.org'),]
 SERVER_EMAIL = "ausa_it@animeusa.org"
 
-ALLOWED_HOSTS = ['45.33.125.163','http://regtest.animeusa.org/']
+ALLOWED_HOSTS = ['45.33.125.163','http://regtest.animeusa.org/','regtest.animeusa.org']
 
 
 # Application definition
