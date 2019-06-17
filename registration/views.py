@@ -359,8 +359,8 @@ def addNewStaff(request):
     shirt = ShirtSizes.objects.get(id=pds['shirtsize'])
 
     staff = Staff(attendee=attendee, event=event)
-    staff.twitter = pds['twitter']
-    staff.telegram = pds['telegram']
+    #staff.twitter = pds['twitter']
+    #staff.telegram = pds['telegram']
     staff.shirtsize = shirt
     staff.specialSkills = pds['specialSkills']
     staff.specialFood = pds['specialFood']
@@ -368,21 +368,40 @@ def addNewStaff(request):
     staff.contactName = pds['contactName']
     staff.contactPhone = pds['contactPhone']
     staff.contactRelation = pds['contactRelation']
+    deptList = Department.objects.all()
+    dept_dict = {x.id: x for x in deptList}
+    divList = Division.objects.all()
+    div_dict = {x.id: x for x in divList}
+    titleList = Title.objects.all()
+    title_dict = {x.id: x for x in titleList}
+    staff.department = dept_dict[int(pds['department'])]
+    staff.division = div_dict[int(pds['division'])]
+    staff.title = title_dict[int(pds['title'])]
+    staff.accommodationType = pds['accommodationType']
+    staff.roommateRequests = pds['roommateRequests']
+    staff.roomateBlacklist = pds['roomateBlacklist']
+    staff.discord = pds['discord']
+    
+    #Staff.objects.all().delete()
     staff.save()
 
-    priceLevel = PriceLevel.objects.get(id=int(pdp['id']))
+    if "priceLevel" in request.body: 
+      priceLevel = PriceLevel.objects.get(id=int(pdp['id']));
+      orderItem = OrderItem(badge=badge, priceLevel=priceLevel, enteredBy="WEB")
+      orderItem.save()
 
-    orderItem = OrderItem(badge=badge, priceLevel=priceLevel, enteredBy="WEB")
-    orderItem.save()
+      for option in pdp['options']:
+          plOption = PriceLevelOption.objects.get(id=int(option['id']))
+          attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
+          attendeeOption.save()
 
-    for option in pdp['options']:
-        plOption = PriceLevelOption.objects.get(id=int(option['id']))
-        attendeeOption = AttendeeOptions(option=plOption, orderItem=orderItem, optionValue=option['value'])
-        attendeeOption.save()
+      orderItems = request.session.get('order_items', [])
+      orderItems.append(orderItem.id)
+      request.session['order_items'] = orderItems
 
-    orderItems = request.session.get('order_items', [])
-    orderItems.append(orderItem.id)
-    request.session['order_items'] = orderItems
+      discount = event.newStaffDiscount
+      if discount:
+          request.session["discount"] = discount.codeName
 
     discount = event.newStaffDiscount
     if discount:
@@ -2153,6 +2172,32 @@ def getDepartments(request):
 def getAllDepartments(request):
     depts = Department.objects.order_by('name')
     data = [{'name': item.name, 'id': item.id} for item in depts]
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
+def getDivisions(request):
+    divs = Division.objects.order_by('id')
+    for div in divs:
+       data = [{'name': div.name, 'id':div.id} for div in divs]
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
+def getDivisionMapping(request):
+    depts = Department.objects.order_by('name')
+    divs = Division.objects.order_by('id')
+    data = {}
+    for div in divs:
+        data[str(div)] = {}
+        for dept in depts:
+            if dept.divisionID == div.id:
+                print(str(div.name))
+                data[str(div)][dept.id]= str(dept)
+    print(data)
+	
+  #  data = [{'name': item.name, 'id': item.id} for item in divs]
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
+def getTitles(request):
+    titles = Title.objects.order_by('name')
+    data = [{'name': item.name, 'groupNo': item.groupNo, 'id': item.id} for item in titles]
     return HttpResponse(json.dumps(data), content_type='application/json')
 
 def getPriceLevelList(levels):

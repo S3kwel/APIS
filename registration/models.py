@@ -204,6 +204,7 @@ class TableSize(LookupTable):
 class Department(models.Model):
     name = models.CharField(max_length=200, blank=True)
     volunteerListOk = models.BooleanField(default=False)
+    divisionID = models.IntegerField(default=0)
 
     def __str__(self):
       return self.name
@@ -384,6 +385,7 @@ class Staff(models.Model):
     roommateRequests = models.CharField(max_length=200, blank=True)
     roomateBlacklist = models.CharField(max_length=200, blank=True)
     discord = models.CharField(max_length=200, blank=True)
+
     def __str__(self):
       return '%s %s' % (self.attendee.firstName, self.attendee.lastName)
 
