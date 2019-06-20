@@ -35,6 +35,7 @@
 
         <h3><a name="level"></a>Select your Membership Type</h3>
         <hr>
+		<!-- This doesn't appear to be doing anything yet.  -->
           {% show_price_types %}
         <div class="container-fluid">
     		<div class="row" id="levelContainer">
@@ -116,28 +117,6 @@
                 changeYear: true
             });
         }
-        $.getJSON("{% url 'pricelevels' %}", function(data) {
-            levelData = data;
-            $.each( data, function( key, val ) {
-                levelTemplateData.push({
-                    name: val.name,
-                    price: "$" + val.base_price,
-                    levelId: "level_" + val.id,
-                    selectText: "Select " + val.name
-                });
-            });
-            if (levelTemplateData.length == 0) {
-                $("#levelContainerAlert").show();
-            } else {
-                $("#levelContainer").loadTemplate($("#levelTemplate"), levelTemplateData);
-                if (levelTemplateData.length == 1) {
-                    select_level(1);
-                }
-            }
-            $(".changeLevel").hide();
-            
-        });
-
         $.getJSON("{% url 'departments' %}", function(data) {
             deptData = data;
             $.each(data, function(key, val) {

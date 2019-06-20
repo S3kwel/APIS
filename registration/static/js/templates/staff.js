@@ -77,6 +77,10 @@ async function getOptionsFromJSON(path){
 
 
     $( "body" ).ready(async function() { 
+		//Open the modal to hopefully deter people from being idiots...
+		$('#directModal').modal('show'); 
+		
+		
 		// only init the javascript datepicker if none is provided by the browser natively
         if (!Modernizr.inputtypes.date) {
             $("#birthDate").datepicker({

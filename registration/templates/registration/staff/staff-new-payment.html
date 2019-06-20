@@ -18,15 +18,34 @@
   </div>
 </div>
 
+<div class="modal fade" id="directModal" data-backdrop="static" data-keyboard="false" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title" id="myModalLabel">Before you start...</h4>
+      </div>
+      <div class="modal-body">
+    	<p>Please note that this form is for <b>existing staff members</b> to provide information for {{event}}.</p>
+		<p>If you were <b>referred</b> here for a specific position by a Department Head or other convention leadership, you may also complete this form.  
+		<p>If you are not yet a staff member and would like to apply, please complete the Staff Interest form instead of this one.</p>
+		<div class='text-center'>
+			<p><a type="button" class="btn btn-primary" target="_blank" data-dismiss="modal">I'm a staff member or I was referred to this page</a></p>
+			<p><a type="button" class="btn btn-primary" href="https://docs.google.com/forms/d/e/1FAIpQLSfJHB5KcAJqOxOv-zaumdBSbD87Wa2lSWHzUaBqyOes5raiMg/viewform">Take me to the Staff Interest Form</a></p>
+		</div> 
+      </div>
+    </div>
+  </div>
+</div>
+
     {% if not token and auth == True%}
-		<h1>New Staff Registration <br/>{{event}}</h1>
+		<h1>{{event}}<small>&nbsp; Staff Information Form</small></h1>
         <p>Your session has expired. Please use the link in your registration email again to start over.</p>
     {% else %}
 
 	<form class="form-horizontal" role="form" data-toggle="validator">
 	<div class="tab-content">
 	<div role="tabpanel" class="tab-pane fade in active" id="personal">
-		<h1>{{event}}<small>&nbsp; Staff Registration</small></h1>
+		<h1>{{event}}<small>&nbsp; Staff Information Form</small></h1>
 
 		<p>Please review and update the information below. If you have any questions about this form, please contact <a href='mailto:{{ event.staffEmail }}'>{{ event.staffEmail }}</a>. Required fields are marked with a red asterisk (<span style="color:red;">*</span>)</p>
         {% show_attendee_form event=event %}
@@ -73,10 +92,11 @@
 		auth_token = Boolean(auth_token)
 	 
 </script>
-
 <script type="text/javascript" src="/static/js/templates/price-types.js"></script>
 <script type="text/javascript" src="/static/js/templates/staff.js"></script>
 <script type="text/javascript">
+	
+
 
 	$("#register").click(doRegister);
 
@@ -87,7 +107,7 @@
    	var discount = false;
 
 	{% else %}
-	alert("JS2"); 
+	console.warn("EM: JS2"); 
 	var adult = true;
     var discount = {{event.newStaffDiscount.amountOff}};
 	

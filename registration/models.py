@@ -8,6 +8,8 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 from django.contrib.auth.models import User
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFill
 
 # Lookup and supporting tables.
 class LookupTable(models.Model):

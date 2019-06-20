@@ -62,6 +62,7 @@ sudo venv/bin/pip install django-debug-toolbar
 sudo venv/bin/pip install image
 sudo venv/bin/pip install requests
 sudo venv/bin/pip install backports.weakref
+sudo venv/bin/pip install django-imagekit
 
 ## IF YOU NEED TO CLEAR MIGRATIONS (DEVELOPMENT ONLY)
 find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
